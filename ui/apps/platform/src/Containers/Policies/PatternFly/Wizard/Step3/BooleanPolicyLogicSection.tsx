@@ -3,6 +3,7 @@ import { Flex, GridItem } from '@patternfly/react-core';
 import { useFormikContext } from 'formik';
 
 import {
+    networkPolicyFieldDescriptors,
     policyConfigurationDescriptor,
     networkDetectionDescriptor,
     auditLogDescriptor,
@@ -24,18 +25,16 @@ function BooleanPolicyLogicSection({ readOnly = false }: BooleanPolicyLogicSecti
     const { values } = useFormikContext<Policy>();
 
     const isImageSigningEnabled = useFeatureFlagEnabled('ROX_VERIFY_IMAGE_SIGNATURE');
+    const isNetworkPolicyFieldsEnabled = useFeatureFlagEnabled('ROX_NETPOL_FIELDS');
     React.useEffect(() => {
         if (values.eventSource === 'AUDIT_LOG_EVENT') {
             setDescriptor(auditLogDescriptor);
         } else {
-            const descriptors = isImageSigningEnabled
-                ? [
-                      ...policyConfigurationDescriptor,
-                      ...networkDetectionDescriptor,
-                      imageSigningCriteriaDescriptor,
-                  ]
-                : [...policyConfigurationDescriptor, ...networkDetectionDescriptor];
-            setDescriptor(descriptors);
+            setDescriptor([
+                ...policyConfigurationDescriptor,
+                ...networkDetectionDescriptor,
+                ...(isImageSigningEnabled ? [imageSigningCriteriaDescriptor] : []),
+                ...(isNetworkPolicyFieldsEnabled ? networkPolicyFieldDescriptors : []),])
         }
     }, [values.eventSource, isImageSigningEnabled]);
 

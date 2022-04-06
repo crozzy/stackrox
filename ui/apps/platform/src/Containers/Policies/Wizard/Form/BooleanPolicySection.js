@@ -15,23 +15,22 @@ import {
     networkDetectionDescriptor,
     auditLogDescriptor,
     imageSigningCriteriaDescriptor,
+    networkPolicyFieldDescriptors,
 } from './descriptors';
 
 function BooleanPolicySection({ readOnly, hasHeader, hasAuditLogEventSource, criteriaLocked }) {
     const [descriptor, setDescriptor] = useState([]);
     const isImageSigningEnabled = useFeatureFlagEnabled('ROX_VERIFY_IMAGE_SIGNATURE');
+    const isNetworkPolicyFieldsEnabled = useFeatureFlagEnabled('ROX_NETPOL_FIELDS');
     useEffect(() => {
         if (hasAuditLogEventSource) {
             setDescriptor(auditLogDescriptor);
         } else {
-            const descriptors = isImageSigningEnabled
-                ? [
-                      ...policyConfigurationDescriptor,
-                      ...networkDetectionDescriptor,
-                      imageSigningCriteriaDescriptor,
-                  ]
-                : [...policyConfigurationDescriptor, ...networkDetectionDescriptor];
-            setDescriptor(descriptors);
+            setDescriptor([
+                ...policyConfigurationDescriptor,
+                ...networkDetectionDescriptor,
+                ...(isImageSigningEnabled ? [imageSigningCriteriaDescriptor] : []),
+                ...(isNetworkPolicyFieldsEnabled ? networkPolicyFieldDescriptors : []),])
         }
     }, [hasAuditLogEventSource, isImageSigningEnabled]);
 
