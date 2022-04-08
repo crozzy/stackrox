@@ -198,8 +198,10 @@ func (m *managerImpl) flushIndicatorQueue() {
 	m.deploymentObservationLock.Lock()
 	for _, indicator := range indicatorSlice {
 		// Do not add it to the baseline map if we are in the observation period for that deployment
-		if features.PostgresDatastore.Enabled() && m.deploymentObservationMap[indicator.GetDeploymentId()].inObservation {
-			continue
+		if features.PostgresDatastore.Enabled() {
+			if deployMap, found := m.deploymentObservationMap[indicator.GetDeploymentId()]; !found || deployMap.inObservation {
+				continue
+			}
 		}
 
 		key := indicatorToBaselineKey(indicator)
