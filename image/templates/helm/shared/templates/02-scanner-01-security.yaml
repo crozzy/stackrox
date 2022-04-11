@@ -1,7 +1,8 @@
 {{- include "srox.init" . -}}
 
-{{- if not ._rox.scanner.disable -}}
+{{- if not ._rox.scanner.disable }}
 
+{{- if ._rox.system.enableDeprecatedPodSecurityPolicies }}
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -19,9 +20,7 @@ rules:
   - {{ include "srox.globalResourceName" (list . "stackrox-scanner") }}
   verbs:
   - use
-
 ---
-
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
@@ -39,9 +38,7 @@ subjects:
   - kind: ServiceAccount
     name: scanner
     namespace: {{ .Release.Namespace }}
-
 ---
-
 apiVersion: policy/v1beta1
 kind: PodSecurityPolicy
 metadata:
@@ -71,10 +68,10 @@ spec:
     rule: 'RunAsAny'
   fsGroup:
     rule: 'RunAsAny'
+{{- end }}
 
 {{- if and ._rox.env.openshift ._rox.system.createSCCs }}
 ---
-
 kind: SecurityContextConstraints
 apiVersion: security.openshift.io/v1
 metadata:
@@ -147,6 +144,5 @@ subjects:
 - kind: ServiceAccount
   name: scanner
   namespace: {{ .Release.Namespace }}
-{{ end -}}
-
-{{ end -}}
+{{- end }}
+{{- end }}
