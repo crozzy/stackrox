@@ -56,7 +56,6 @@ func newManager(deploytimeDetector deploytime.Detector, runtimeDetector runtime.
 		processFilter:           filter,
 
 		queuedIndicators: make(map[string]*storage.ProcessIndicator),
-		//deploymentObservationMap: make(map[string]*deploymentObservation),
 
 		indicatorRateLimiter: rate.NewLimiter(rate.Every(rateLimitDuration), 5),
 		indicatorFlushTicker: time.NewTicker(indicatorFlushTickerDuration),
