@@ -68,9 +68,6 @@ import io.fabric8.kubernetes.api.model.networking.v1.NetworkPolicyBuilder
 import io.fabric8.kubernetes.api.model.networking.v1.NetworkPolicyEgressRuleBuilder
 import io.fabric8.kubernetes.api.model.networking.v1.NetworkPolicyIngressRuleBuilder
 import io.fabric8.kubernetes.api.model.networking.v1.NetworkPolicyPeerBuilder
-import io.fabric8.kubernetes.api.model.policy.v1beta1.HostPortRange
-import io.fabric8.kubernetes.api.model.policy.v1beta1.PodSecurityPolicy
-import io.fabric8.kubernetes.api.model.policy.v1beta1.PodSecurityPolicyBuilder
 import io.fabric8.kubernetes.api.model.rbac.ClusterRole
 import io.fabric8.kubernetes.api.model.rbac.ClusterRoleBinding
 import io.fabric8.kubernetes.api.model.rbac.PolicyRule
@@ -1600,63 +1597,6 @@ class Kubernetes implements OrchestratorMain {
         withRetry(2, 3) {
             client.rbac().clusterRoleBindings().withName(roleBinding.name).delete()
         }
-    }
-
-    /*
-        PodSecurityPolicies
-    */
-
-    protected generatePspRole() {
-        def rules = [new K8sPolicyRule(
-                apiGroups: ["policy"],
-                resources: ["podsecuritypolicies"],
-                resourceNames: ["allow-all-for-test"],
-                verbs: ["use"]
-        ),]
-        return new K8sRole(
-                name: "allow-all-for-test",
-//                namespace: namespace,
-                clusterRole: true,
-                rules: rules
-        )
-    }
-
-    protected generatePspRoleBinding(String namespace) {
-        def roleBinding =  new K8sRoleBinding(
-                name: "allow-all-for-test-" + namespace,
-                namespace: namespace,
-                roleRef: generatePspRole(),
-                subjects: [new K8sSubject(
-                        name: "default",
-                        namespace: namespace,
-                        kind: "ServiceAccount"
-                )]
-        )
-        return roleBinding
-    }
-
-    protected defaultPspForNamespace(String namespace) {
-        PodSecurityPolicy psp = new PodSecurityPolicyBuilder().withNewMetadata()
-                .withName("allow-all-for-test")
-                .endMetadata()
-                .withNewSpec()
-                .withPrivileged(true)
-                .withAllowPrivilegeEscalation(true)
-                .withAllowedCapabilities("*")
-                .withVolumes("*")
-                .withHostNetwork(true)
-                .withHostPorts(new HostPortRange(65535, 0))
-                .withHostIPC(true)
-                .withHostPID(true)
-                .withNewRunAsUser().withRule("RunAsAny").endRunAsUser()
-                .withNewSeLinux().withRule("RunAsAny").endSeLinux()
-                .withNewSupplementalGroups().withRule("RunAsAny").endSupplementalGroups()
-                .withNewFsGroup().withRule("RunAsAny").endFsGroup()
-                .endSpec()
-                .build()
-        client.policy().v1beta1().podSecurityPolicies().createOrReplace(psp)
-        createClusterRole(generatePspRole())
-        createClusterRoleBinding(generatePspRoleBinding(namespace))
     }
 
     /*
