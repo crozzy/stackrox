@@ -2012,6 +2012,10 @@ commands:
               fi
             fi
 
+            if [[ -z "${POD_SECURITY_POLICIES:-}" ]]; then
+              cci-export POD_SECURITY_POLICIES "$POD_SECURITY_POLICIES"
+            fi
+
             cci-export MONITORING_IMAGE quay.io/rhacs-eng/monitoring:$(cat MONITORING_VERSION)
             deploy_dir="deploy/<< parameters.orchestrator-flavor >>"
             "${deploy_dir}/central.sh"
