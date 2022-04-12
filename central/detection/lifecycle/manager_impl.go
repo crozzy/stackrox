@@ -154,7 +154,7 @@ func (m *managerImpl) flushDeploymentQueue() {
 
 	for {
 		// ObservationEnd is in the future so we have nothing to do at this time
-		head := m.deploymentQueue.Pull()
+		head := m.deploymentQueue.Peek()
 		if head == nil || protoutils.After(head.ObservationEnd, types.TimestampNow()) {
 			log.Info("SHREWS -> flushDeploymentQueue -- leaving")
 			return

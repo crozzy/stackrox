@@ -52,15 +52,15 @@ func (q *DeploymentObservationQueue) Pull() *DeploymentObservation {
 
 	dep := q.queue.Remove(q.queue.Front()).(*DeploymentObservation)
 
-	// keep the deployment in the map so we know that we have processed this deployment.
+	// Keep the deployment in the map, so we know that we have processed this deployment.
 	q.deploymentMap[dep.DeploymentID] = nil
 
 	log.Infof("SHREWS -> pull returned %s", dep)
 	return dep
 }
 
-func (q *DeploymentObservationQueue) Peak() *DeploymentObservation {
-	log.Info("SHREWS -> peak")
+func (q *DeploymentObservationQueue) Peek() *DeploymentObservation {
+	log.Info("SHREWS -> peek")
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 
@@ -93,11 +93,14 @@ func (q *DeploymentObservationQueue) RemoveDeployment(deploymentID string) {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 
+	// The deployment is kept in the map after it has been processed to ensure we
+	// do not process it again.  In that case the depObj will be nil
 	depObj, found := q.deploymentMap[deploymentID]
 	if !found {
 		return
 	}
 
+	// Remove the object from the queue if it is not nil.
 	if depObj != nil {
 		q.queue.Remove(depObj)
 	}
