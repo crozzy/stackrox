@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stackrox/rox/central/activecomponent/updater/aggregator"
 	deploymentDatastore "github.com/stackrox/rox/central/deployment/datastore"
+	queue "github.com/stackrox/rox/central/deployment/queue"
 	"github.com/stackrox/rox/central/detection/alertmanager"
 	"github.com/stackrox/rox/central/detection/deploytime"
 	"github.com/stackrox/rox/central/detection/lifecycle/metrics"
@@ -28,6 +29,7 @@ import (
 	"github.com/stackrox/rox/pkg/policies"
 	"github.com/stackrox/rox/pkg/process/filter"
 	processBaselinePkg "github.com/stackrox/rox/pkg/processbaseline"
+	"github.com/stackrox/rox/pkg/protoutils"
 	"github.com/stackrox/rox/pkg/sac"
 	"github.com/stackrox/rox/pkg/search"
 	"github.com/stackrox/rox/pkg/set"
@@ -62,7 +64,7 @@ type managerImpl struct {
 	processFilter           filter.Filter
 
 	queuedIndicators map[string]*storage.ProcessIndicator
-	deploymentQueue  *deploymentObservationQueue
+	deploymentQueue  *queue.DeploymentObservationQueue
 
 	indicatorQueueLock    sync.Mutex
 	flushProcessingLock   concurrency.TransparentMutex
@@ -150,19 +152,19 @@ func (m *managerImpl) flushDeploymentQueue() {
 	log.Info("SHREWS -> flushDeploymentQueue")
 	defer centralMetrics.SetFunctionSegmentDuration(time.Now(), "CheckAndUpdateBaseline")
 
-	// observationEnd is in the future so we return
-	if m.deploymentQueue.isEmpty() || m.deploymentQueue.peak().observationEnd.Compare(types.TimestampNow()) > 0 {
-		log.Info("SHREWS -> flushDeploymentQueue -- leaving")
-		return
+	for {
+		// ObservationEnd is in the future so we have nothing to do at this time
+		head := m.deploymentQueue.Pull()
+		if head == nil || protoutils.After(head.ObservationEnd, types.TimestampNow()) {
+			log.Info("SHREWS -> flushDeploymentQueue -- leaving")
+			return
+		}
+
+		// Grab the first deployment to baseline.
+		deployment := m.deploymentQueue.Pull()
+
+		m.addBaseline(deployment.DeploymentID)
 	}
-
-	// Grab the first deployment to baseline.
-	deployment := m.deploymentQueue.pull()
-
-	m.addBaseline(deployment.deploymentID)
-
-	// Process the next deployment in the queue
-	m.flushDeploymentQueue()
 }
 
 func (m *managerImpl) flushIndicatorQueue() {
@@ -201,11 +203,11 @@ func (m *managerImpl) flushIndicatorQueue() {
 	defer centralMetrics.SetFunctionSegmentDuration(time.Now(), "CheckAndUpdateBaseline")
 
 	// Group the processes into particular baseline segments
-	baselineMap := make(map[processBaselineKey][]*storage.ProcessIndicator, len(indicatorSlice))
+	baselineMap := make(map[processBaselineKey][]*storage.ProcessIndicator)
 
 	for _, indicator := range indicatorSlice {
 		// Do not add it to the baseline map if we are in the observation period for that deployment
-		if m.deploymentQueue.inObservation(indicator.GetDeploymentId()) {
+		if m.deploymentQueue.InObservation(indicator.GetDeploymentId()) {
 			continue
 		}
 
@@ -239,7 +241,7 @@ func (m *managerImpl) addBaseline(deploymentID string) {
 	)
 
 	// Group the processes into particular baseline segments
-	baselineMap := make(map[processBaselineKey][]*storage.ProcessIndicator, len(indicatorSlice))
+	baselineMap := make(map[processBaselineKey][]*storage.ProcessIndicator)
 	for _, indicator := range indicatorSlice {
 		key := indicatorToBaselineKey(indicator)
 		baselineMap[key] = append(baselineMap[key], indicator)
@@ -320,16 +322,16 @@ func (m *managerImpl) IndicatorAdded(indicator *storage.ProcessIndicator) error 
 	// TODO:  figure out what to do if the time conversion has an error
 	observationEnd, _ := types.TimestampProto(time.Now().Add(genDuration))
 	log.Infof("SHREWS -> IndicatorAdded -- push %s", indicator.GetDeploymentId())
-	m.deploymentQueue.push(&deploymentObservation{deploymentID: indicator.GetDeploymentId(), inObservation: true, observationEnd: observationEnd})
+	m.deploymentQueue.Push(&queue.DeploymentObservation{DeploymentID: indicator.GetDeploymentId(), InObservation: true, ObservationEnd: observationEnd})
 
 	m.addToQueue(indicator)
 
 	if m.indicatorRateLimiter.Allow() {
 		go m.flushIndicatorQueue()
 	}
-	if m.deploymentRateLimiter.Allow() {
-		go m.flushDeploymentQueue()
-	}
+	//if m.deploymentRateLimiter.Allow() {
+	//	go m.flushDeploymentQueue()
+	//}
 
 	return nil
 }
@@ -427,7 +429,7 @@ func (m *managerImpl) DeploymentRemoved(deploymentID string) error {
 	_, err := m.alertManager.AlertAndNotify(lifecycleMgrCtx, nil, alertmanager.WithDeploymentID(deploymentID, true))
 
 	// TODO:  figure out if I want to return an error from this
-	m.deploymentQueue.removeDeployment(deploymentID)
+	m.deploymentQueue.RemoveDeployment(deploymentID)
 
 	return err
 }

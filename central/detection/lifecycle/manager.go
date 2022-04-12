@@ -5,6 +5,7 @@ import (
 
 	"github.com/stackrox/rox/central/activecomponent/updater/aggregator"
 	deploymentDatastore "github.com/stackrox/rox/central/deployment/datastore"
+	queue "github.com/stackrox/rox/central/deployment/queue"
 	"github.com/stackrox/rox/central/detection/alertmanager"
 	"github.com/stackrox/rox/central/detection/deploytime"
 	"github.com/stackrox/rox/central/detection/runtime"
@@ -22,7 +23,7 @@ import (
 const (
 	rateLimitDuration             = 10 * time.Second
 	indicatorFlushTickerDuration  = 1 * time.Minute
-	deploymentFlushTickerDuration = 1 * time.Minute
+	deploymentFlushTickerDuration = 5 * time.Second
 )
 
 var (
@@ -57,7 +58,7 @@ func newManager(deploytimeDetector deploytime.Detector, runtimeDetector runtime.
 		processFilter:           filter,
 
 		queuedIndicators: make(map[string]*storage.ProcessIndicator),
-		deploymentQueue:  newObservationQueue(),
+		deploymentQueue:  queue.NewObservationQueue(),
 
 		indicatorRateLimiter:  rate.NewLimiter(rate.Every(rateLimitDuration), 5),
 		indicatorFlushTicker:  time.NewTicker(indicatorFlushTickerDuration),
