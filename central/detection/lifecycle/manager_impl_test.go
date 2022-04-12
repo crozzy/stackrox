@@ -95,7 +95,7 @@ func (suite *ManagerTestSuite) TestBaselineNotFound() {
 	key, indicator := makeIndicator()
 	elements := fixtures.MakeBaselineItems(indicator.GetSignal().GetExecFilePath())
 	suite.baselines.EXPECT().GetProcessBaseline(gomock.Any(), key).Return(nil, false, nil)
-	suite.baselines.EXPECT().UpsertProcessBaseline(gomock.Any(), key, elements, true, false).Return(nil, nil)
+	suite.baselines.EXPECT().UpsertProcessBaseline(gomock.Any(), key, elements, true, true).Return(nil, nil)
 	_, err := suite.manager.checkAndUpdateBaseline(indicatorToBaselineKey(indicator), []*storage.ProcessIndicator{indicator})
 	suite.NoError(err)
 	suite.mockCtrl.Finish()
@@ -109,7 +109,7 @@ func (suite *ManagerTestSuite) TestBaselineNotFound() {
 
 	suite.mockCtrl = gomock.NewController(suite.T())
 	suite.baselines.EXPECT().GetProcessBaseline(gomock.Any(), key).Return(nil, false, nil)
-	suite.baselines.EXPECT().UpsertProcessBaseline(gomock.Any(), key, elements, true, false).Return(nil, expectedError)
+	suite.baselines.EXPECT().UpsertProcessBaseline(gomock.Any(), key, elements, true, true).Return(nil, expectedError)
 	_, err = suite.manager.checkAndUpdateBaseline(indicatorToBaselineKey(indicator), []*storage.ProcessIndicator{indicator})
 	suite.Equal(expectedError, err)
 }

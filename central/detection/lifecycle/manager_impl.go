@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/gogo/protobuf/types"
 	"github.com/pkg/errors"
 	"github.com/stackrox/rox/central/activecomponent/updater/aggregator"
 	deploymentDatastore "github.com/stackrox/rox/central/deployment/datastore"
@@ -48,11 +49,6 @@ type processBaselineKey struct {
 	namespace     string
 }
 
-type deploymentObservation struct {
-	inObservation    bool
-	observationTimer *time.Timer
-}
-
 type managerImpl struct {
 	reprocessor        reprocessor.Loop
 	runtimeDetector    runtime.Detector
@@ -65,13 +61,15 @@ type managerImpl struct {
 	deletedDeploymentsCache expiringcache.Cache
 	processFilter           filter.Filter
 
-	queuedIndicators         map[string]*storage.ProcessIndicator
-	deploymentObservationMap sync.Map
+	queuedIndicators map[string]*storage.ProcessIndicator
+	deploymentQueue  *deploymentObservationQueue
 
-	indicatorQueueLock   sync.Mutex
-	flushProcessingLock  concurrency.TransparentMutex
-	indicatorRateLimiter *rate.Limiter
-	indicatorFlushTicker *time.Ticker
+	indicatorQueueLock    sync.Mutex
+	flushProcessingLock   concurrency.TransparentMutex
+	indicatorRateLimiter  *rate.Limiter
+	indicatorFlushTicker  *time.Ticker
+	deploymentFlushTicker *time.Ticker
+	deploymentRateLimiter *rate.Limiter
 
 	policyAlertsLock          sync.RWMutex
 	removedOrDisabledPolicies set.StringSet
@@ -132,6 +130,13 @@ func (m *managerImpl) flushQueuePeriodically() {
 	}
 }
 
+func (m *managerImpl) flushDeploymentQueuePeriodically() {
+	defer m.deploymentFlushTicker.Stop()
+	for range m.deploymentFlushTicker.C {
+		m.flushDeploymentQueue()
+	}
+}
+
 func indicatorToBaselineKey(indicator *storage.ProcessIndicator) processBaselineKey {
 	return processBaselineKey{
 		deploymentID:  indicator.GetDeploymentId(),
@@ -139,6 +144,25 @@ func indicatorToBaselineKey(indicator *storage.ProcessIndicator) processBaseline
 		clusterID:     indicator.GetClusterId(),
 		namespace:     indicator.GetNamespace(),
 	}
+}
+
+func (m *managerImpl) flushDeploymentQueue() {
+	log.Info("SHREWS -> flushDeploymentQueue")
+	defer centralMetrics.SetFunctionSegmentDuration(time.Now(), "CheckAndUpdateBaseline")
+
+	// observationEnd is in the future so we return
+	if m.deploymentQueue.isEmpty() || m.deploymentQueue.peak().observationEnd.Compare(types.TimestampNow()) > 0 {
+		log.Info("SHREWS -> flushDeploymentQueue -- leaving")
+		return
+	}
+
+	// Grab the first deployment to baseline.
+	deployment := m.deploymentQueue.pull()
+
+	m.addBaseline(deployment.deploymentID)
+
+	// Process the next deployment in the queue
+	m.flushDeploymentQueue()
 }
 
 func (m *managerImpl) flushIndicatorQueue() {
@@ -162,7 +186,6 @@ func (m *managerImpl) flushIndicatorQueue() {
 		if deleted, _ := m.deletedDeploymentsCache.Get(indicator.GetDeploymentId()).(bool); deleted {
 			continue
 		}
-
 		indicatorSlice = append(indicatorSlice, indicator)
 	}
 
@@ -182,10 +205,8 @@ func (m *managerImpl) flushIndicatorQueue() {
 
 	for _, indicator := range indicatorSlice {
 		// Do not add it to the baseline map if we are in the observation period for that deployment
-		if features.PostgresDatastore.Enabled() {
-			if deployMap, found := m.deploymentObservationMap.Load(indicator.GetDeploymentId()); !found || deployMap.(*deploymentObservation).inObservation {
-				continue
-			}
+		if m.deploymentQueue.inObservation(indicator.GetDeploymentId()) {
+			continue
 		}
 
 		key := indicatorToBaselineKey(indicator)
@@ -266,7 +287,7 @@ func (m *managerImpl) checkAndUpdateBaseline(baselineKey processBaselineKey, ind
 		return false, nil
 	}
 	if !exists {
-		_, err = m.baselines.UpsertProcessBaseline(lifecycleMgrCtx, key, elements, true, features.PostgresDatastore.Enabled())
+		_, err = m.baselines.UpsertProcessBaseline(lifecycleMgrCtx, key, elements, true, true)
 		return false, err
 	}
 
@@ -294,32 +315,22 @@ func (m *managerImpl) IndicatorAdded(indicator *storage.ProcessIndicator) error 
 	}
 	metrics.ProcessFilterCounterInc("Added")
 
-	if features.PostgresDatastore.Enabled() {
-		m.setupDeploymentObservation(indicator.GetDeploymentId())
-	}
+	genDuration := env.BaselineGenerationDuration.DurationSetting()
+	// TODO:  figure out what to do if the time conversion has an error
+	observationEnd, _ := types.TimestampProto(time.Now().Add(genDuration))
+	log.Infof("SHREWS -> IndicatorAdded -- push %s", indicator.GetDeploymentId())
+	m.deploymentQueue.push(&deploymentObservation{deploymentID: indicator.GetDeploymentId(), inObservation: true, observationEnd: observationEnd})
 
 	m.addToQueue(indicator)
 
 	if m.indicatorRateLimiter.Allow() {
 		go m.flushIndicatorQueue()
 	}
+	if m.deploymentRateLimiter.Allow() {
+		go m.flushDeploymentQueue()
+	}
 
 	return nil
-}
-
-func (m *managerImpl) setupDeploymentObservation(deploymentID string) {
-	_, found := m.deploymentObservationMap.Load(deploymentID)
-	if !found {
-		deployTimer := time.NewTimer(env.BaselineGenerationDuration.DurationSetting())
-		m.deploymentObservationMap.Store(deploymentID, &deploymentObservation{inObservation: true, observationTimer: deployTimer})
-
-		go func() {
-			<-deployTimer.C
-
-			m.addBaseline(deploymentID)
-			m.deploymentObservationMap.Store(deploymentID, &deploymentObservation{inObservation: false, observationTimer: nil})
-		}()
-	}
 }
 
 func (m *managerImpl) filterOutDisabledPolicies(alerts *[]*storage.Alert) {
@@ -414,15 +425,8 @@ func (m *managerImpl) UpsertPolicy(policy *storage.Policy) error {
 func (m *managerImpl) DeploymentRemoved(deploymentID string) error {
 	_, err := m.alertManager.AlertAndNotify(lifecycleMgrCtx, nil, alertmanager.WithDeploymentID(deploymentID, true))
 
-	if features.PostgresDatastore.Enabled() {
-		if deployMap, ok := m.deploymentObservationMap.Load(deploymentID); ok && deployMap.(*deploymentObservation).observationTimer != nil {
-			// stop this timer and drain the channel
-			if !deployMap.(*deploymentObservation).observationTimer.Stop() {
-				<-deployMap.(*deploymentObservation).observationTimer.C
-			}
-			m.deploymentObservationMap.Delete(deploymentID)
-		}
-	}
+	// TODO:  figure out if I want to return an error from this
+	m.deploymentQueue.removeDeployment(deploymentID)
 
 	return err
 }

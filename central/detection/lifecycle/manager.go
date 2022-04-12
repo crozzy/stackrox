@@ -20,8 +20,9 @@ import (
 )
 
 const (
-	rateLimitDuration            = 10 * time.Second
-	indicatorFlushTickerDuration = 1 * time.Minute
+	rateLimitDuration             = 10 * time.Second
+	indicatorFlushTickerDuration  = 1 * time.Minute
+	deploymentFlushTickerDuration = 1 * time.Minute
 )
 
 var (
@@ -56,14 +57,18 @@ func newManager(deploytimeDetector deploytime.Detector, runtimeDetector runtime.
 		processFilter:           filter,
 
 		queuedIndicators: make(map[string]*storage.ProcessIndicator),
+		deploymentQueue:  newObservationQueue(),
 
-		indicatorRateLimiter: rate.NewLimiter(rate.Every(rateLimitDuration), 5),
-		indicatorFlushTicker: time.NewTicker(indicatorFlushTickerDuration),
+		indicatorRateLimiter:  rate.NewLimiter(rate.Every(rateLimitDuration), 5),
+		indicatorFlushTicker:  time.NewTicker(indicatorFlushTickerDuration),
+		deploymentFlushTicker: time.NewTicker(deploymentFlushTickerDuration),
+		deploymentRateLimiter: rate.NewLimiter(rate.Every(rateLimitDuration), 5),
 
 		removedOrDisabledPolicies: set.NewStringSet(),
 		processAggregator:         processAggregator,
 	}
 
 	go m.flushQueuePeriodically()
+	go m.flushDeploymentQueuePeriodically()
 	return m
 }
