@@ -167,7 +167,10 @@ customize:
     {{ range $key, $value := $envVars -}}
     {{ quote $key }}: {{ quote $value }}
     {{ end }}
-{{ end -}}
+{{- end }}
+
+system:
+  enableDeprecatedPodSecurityPolicies: {{ .EnableDeprecatedPodSecurityPolicies }}
 `
 	privateValuesYamlTemplateStr = `
 # StackRox Central Services chart - SECRET configuration values.

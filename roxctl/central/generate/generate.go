@@ -309,6 +309,7 @@ func Command(cliEnvironment environment.Environment) *cobra.Command {
 	if !buildinfo.ReleaseBuild {
 		flags.AddHelmChartDebugSetting(c)
 	}
+	c.PersistentFlags().BoolVar(&centralGenerateCmd.rendererConfig.EnableDeprecatedPodSecurityPolicies, "enable-deprecated-pod-security-policies", false, "Generate deprecated PodSecurityPolicy resources")
 
 	c.AddCommand(centralGenerateCmd.interactive())
 	c.AddCommand(k8s(cliEnvironment))
