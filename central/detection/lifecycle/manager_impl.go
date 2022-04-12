@@ -201,7 +201,7 @@ func (m *managerImpl) flushIndicatorQueue() {
 	defer centralMetrics.SetFunctionSegmentDuration(time.Now(), "CheckAndUpdateBaseline")
 
 	// Group the processes into particular baseline segments
-	baselineMap := make(map[processBaselineKey][]*storage.ProcessIndicator)
+	baselineMap := make(map[processBaselineKey][]*storage.ProcessIndicator, len(indicatorSlice))
 
 	for _, indicator := range indicatorSlice {
 		// Do not add it to the baseline map if we are in the observation period for that deployment
@@ -231,14 +231,15 @@ func (m *managerImpl) addBaseline(deploymentID string) {
 	defer centralMetrics.SetFunctionSegmentDuration(time.Now(), "CheckAndUpdateBaseline")
 
 	// Simply use search to find the process indicators for the deployment
-	indicatorSlice, _ := m.processesDataStore.SearchRawProcessIndicators(lifecycleMgrCtx,
+	indicatorSlice, _ := m.processesDataStore.SearchRawProcessIndicators(
+		lifecycleMgrCtx,
 		search.NewQueryBuilder().
 			AddExactMatches(search.DeploymentID, deploymentID).
 			ProtoQuery(),
 	)
 
 	// Group the processes into particular baseline segments
-	baselineMap := make(map[processBaselineKey][]*storage.ProcessIndicator)
+	baselineMap := make(map[processBaselineKey][]*storage.ProcessIndicator, len(indicatorSlice))
 	for _, indicator := range indicatorSlice {
 		key := indicatorToBaselineKey(indicator)
 		baselineMap[key] = append(baselineMap[key], indicator)

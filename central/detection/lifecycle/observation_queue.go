@@ -105,7 +105,9 @@ func (q *deploymentObservationQueue) removeDeployment(deploymentID string) {
 	if !found {
 		return
 	}
-	q.queue.Remove(depObj)
-	delete(q.deploymentMap, deploymentID)
 
+	if depObj != nil {
+		q.queue.Remove(depObj)
+	}
+	delete(q.deploymentMap, deploymentID)
 }

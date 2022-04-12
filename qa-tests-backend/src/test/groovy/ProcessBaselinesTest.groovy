@@ -114,7 +114,7 @@ class ProcessBaselinesTest extends BaseSpecification {
         // Check that startup processes are not impacted
         Thread.sleep(10000)
         orchestrator.execInContainer(deployment, "ls")
-        Thread.sleep(50000)
+        Thread.sleep(100000)
         orchestrator.execInContainer(deployment, "pwd")
 
         then:
