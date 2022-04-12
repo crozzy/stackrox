@@ -156,7 +156,6 @@ func (m *managerImpl) flushDeploymentQueue() {
 		// ObservationEnd is in the future so we have nothing to do at this time
 		head := m.deploymentQueue.Peek()
 		if head == nil || protoutils.After(head.ObservationEnd, types.TimestampNow()) {
-			log.Info("SHREWS -> flushDeploymentQueue -- leaving")
 			return
 		}
 
@@ -319,9 +318,7 @@ func (m *managerImpl) IndicatorAdded(indicator *storage.ProcessIndicator) error 
 	metrics.ProcessFilterCounterInc("Added")
 
 	genDuration := env.BaselineGenerationDuration.DurationSetting()
-	// TODO:  figure out what to do if the time conversion has an error
 	observationEnd, _ := types.TimestampProto(time.Now().Add(genDuration))
-	log.Infof("SHREWS -> IndicatorAdded -- push %s", indicator.GetDeploymentId())
 	m.deploymentQueue.Push(&queue.DeploymentObservation{DeploymentID: indicator.GetDeploymentId(), InObservation: true, ObservationEnd: observationEnd})
 
 	m.addToQueue(indicator)
@@ -329,9 +326,6 @@ func (m *managerImpl) IndicatorAdded(indicator *storage.ProcessIndicator) error 
 	if m.indicatorRateLimiter.Allow() {
 		go m.flushIndicatorQueue()
 	}
-	//if m.deploymentRateLimiter.Allow() {
-	//	go m.flushDeploymentQueue()
-	//}
 
 	return nil
 }
@@ -428,7 +422,6 @@ func (m *managerImpl) UpsertPolicy(policy *storage.Policy) error {
 func (m *managerImpl) DeploymentRemoved(deploymentID string) error {
 	_, err := m.alertManager.AlertAndNotify(lifecycleMgrCtx, nil, alertmanager.WithDeploymentID(deploymentID, true))
 
-	// TODO:  figure out if I want to return an error from this
 	m.deploymentQueue.RemoveDeployment(deploymentID)
 
 	return err

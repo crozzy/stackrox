@@ -32,10 +32,8 @@ func NewObservationQueue() *DeploymentObservationQueue {
 }
 
 func (q *DeploymentObservationQueue) InObservation(deploymentID string) bool {
-	log.Infof("SHREWS -> inObservation -- %s", deploymentID)
 	deployMap, found := q.deploymentMap[deploymentID]
 
-	// TODO:  come back and think about this.
 	// if we didn't find the deployment or the map points to nil, then we are
 	// not in observation
 	return !(found && deployMap == nil)
@@ -55,7 +53,6 @@ func (q *DeploymentObservationQueue) Pull() *DeploymentObservation {
 	// Keep the deployment in the map, so we know that we have processed this deployment.
 	q.deploymentMap[dep.DeploymentID] = nil
 
-	log.Infof("SHREWS -> pull returned %s", dep)
 	return dep
 }
 
@@ -73,16 +70,14 @@ func (q *DeploymentObservationQueue) Peek() *DeploymentObservation {
 
 // Push attempts to add an item to the queue, and does nothing if object already exists.
 func (q *DeploymentObservationQueue) Push(observation *DeploymentObservation) {
-	log.Infof("SHREWS -> push -- %s", observation)
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 
 	// already observing or observed this deployment
 	if _, found := q.deploymentMap[observation.DeploymentID]; found {
-		log.Infof("SHREWS -> push -- already have it %s", observation.DeploymentID)
 		return
 	}
-
+	log.Infof("SHREWS -> push -- %s", observation)
 	depObj := q.queue.PushBack(observation)
 	q.deploymentMap[observation.DeploymentID] = depObj
 
