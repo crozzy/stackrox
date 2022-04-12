@@ -13,11 +13,14 @@ import (
 	"github.com/stackrox/rox/central/globaldb"
 	"github.com/stackrox/rox/central/metrics"
 	pkgSchema "github.com/stackrox/rox/central/postgres/schema"
+	"github.com/stackrox/rox/central/role/resources"
 	"github.com/stackrox/rox/generated/storage"
+	"github.com/stackrox/rox/pkg/auth/permissions"
 	"github.com/stackrox/rox/pkg/logging"
 	ops "github.com/stackrox/rox/pkg/metrics"
 	"github.com/stackrox/rox/pkg/postgres/pgutils"
 	"github.com/stackrox/rox/pkg/postgres/walker"
+	"github.com/stackrox/rox/pkg/sac"
 	"github.com/stackrox/rox/pkg/sac/effectiveaccessscope"
 )
 
@@ -53,6 +56,7 @@ var (
 		globaldb.RegisterTable(schema)
 		return schema
 	}()
+	targetResource = resources.Indicator
 )
 
 type Store interface {
@@ -277,11 +281,41 @@ func (s *storeImpl) upsert(ctx context.Context, objs ...*storage.ProcessIndicato
 func (s *storeImpl) Upsert(ctx context.Context, obj *storage.ProcessIndicator) error {
 	defer metrics.SetPostgresOperationDurationTime(time.Now(), ops.Upsert, "ProcessIndicator")
 
+	scopeChecker := sac.GlobalAccessScopeChecker(ctx).AccessMode(storage.Access_READ_WRITE_ACCESS).Resource(targetResource)
+	if ok, err := scopeChecker.Allowed(ctx); err != nil {
+		return err
+	} else if !ok {
+		return sac.ErrResourceAccessDenied
+	}
+	eas, err := scopeChecker.EffectiveAccessScope(permissions.Modify(targetResource))
+	if err != nil {
+		return err
+	}
+	if !isInScope(obj, eas) {
+		return sac.ErrResourceAccessDenied
+	}
+
 	return s.upsert(ctx, obj)
 }
 
 func (s *storeImpl) UpsertMany(ctx context.Context, objs []*storage.ProcessIndicator) error {
 	defer metrics.SetPostgresOperationDurationTime(time.Now(), ops.UpdateMany, "ProcessIndicator")
+
+	scopeChecker := sac.GlobalAccessScopeChecker(ctx).AccessMode(storage.Access_READ_WRITE_ACCESS).Resource(targetResource)
+	if ok, err := scopeChecker.Allowed(ctx); err != nil {
+		return err
+	} else if !ok {
+		return sac.ErrResourceAccessDenied
+	}
+	eas, err := scopeChecker.EffectiveAccessScope(permissions.Modify(targetResource))
+	if err != nil {
+		return err
+	}
+	for _, obj := range objs {
+		if !isInScope(obj, eas) {
+			return sac.ErrResourceAccessDenied
+		}
+	}
 
 	if len(objs) < batchAfter {
 		return s.upsert(ctx, objs...)

@@ -17,7 +17,7 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/stackrox/rox/pkg/features"
 	"github.com/stackrox/rox/pkg/postgres/pgtest"
-    {{- if (or (eq .ResourceType "globallyScoped") (eq .ResourceType "permissionChecker")) }}
+    {{- if or (eq .ResourceType "globallyScoped") (eq .ResourceType "permissionChecker") (eq .ResourceType "directlyScoped") }}
     "github.com/stackrox/rox/pkg/sac"{{- end }}
 	"github.com/stackrox/rox/pkg/testutils"
 	"github.com/stackrox/rox/pkg/testutils/envisolator"
@@ -49,7 +49,7 @@ func (s *{{$namePrefix}}StoreSuite) TearDownTest() {
 }
 
 func (s *{{$namePrefix}}StoreSuite) TestStore() {
-    {{- if or (eq .ResourceType "globallyScoped") (eq .ResourceType "permissionChecker") }}
+    {{- if or (eq .ResourceType "globallyScoped") (eq .ResourceType "permissionChecker") (eq .ResourceType "directlyScoped")}}
     ctx := sac.WithAllAccess(context.Background())
     {{- else -}}
     ctx := context.Background()
@@ -74,7 +74,7 @@ func (s *{{$namePrefix}}StoreSuite) TestStore() {
 	s.Nil(found{{.TrimmedType|upperCamelCase}})
 
     {{if not .JoinTable -}}
-    {{- if or (eq .ResourceType "globallyScoped") (eq .ResourceType "permissionChecker") }}
+    {{- if or (eq .ResourceType "globallyScoped") (eq .ResourceType "permissionChecker") (eq .ResourceType "directlyScoped")}}
     withNoAccessCtx := sac.WithNoAccess(ctx)
     {{- end }}
 
@@ -98,7 +98,7 @@ func (s *{{$namePrefix}}StoreSuite) TestStore() {
 	s.NoError(err)
 	s.True({{$name}}Exists)
 	s.NoError(store.Upsert(ctx, {{$name}}))
-    {{- if or (eq .ResourceType "globallyScoped") (eq .ResourceType "permissionChecker") }}
+    {{- if or (eq .ResourceType "globallyScoped") (eq .ResourceType "permissionChecker") (eq .ResourceType "directlyScoped")}}
 	s.ErrorIs(store.Upsert(withNoAccessCtx, {{$name}}), sac.ErrResourceAccessDenied)
     {{- end }}
 

@@ -29,12 +29,14 @@ import (
     "github.com/stackrox/rox/pkg/logging"
     ops "github.com/stackrox/rox/pkg/metrics"
     "github.com/stackrox/rox/pkg/postgres/pgutils"
-    {{if or (eq .ResourceType "globallyScoped") (eq .ResourceType "permissionChecker") -}}
+    {{ if or (eq .ResourceType "globallyScoped") (eq .ResourceType "permissionChecker") -}}
     "github.com/stackrox/rox/pkg/sac"
-    {{- end }}
-    {{- if eq .ResourceType "directlyScoped" -}}
+    {{ else if eq .ResourceType "directlyScoped" -}}
+    "github.com/stackrox/rox/central/role/resources"
+    "github.com/stackrox/rox/pkg/auth/permissions"
     "github.com/stackrox/rox/pkg/sac/effectiveaccessscope"
-    {{- end }}
+    "github.com/stackrox/rox/pkg/sac"
+    {{ end }}
 )
 
 const (
@@ -87,7 +89,7 @@ var (
              		globaldb.RegisterTable(schema)
              		return schema
              	}()
-    {{ if eq .ResourceType "globallyScoped" -}}
+    {{ if or (eq .ResourceType "globallyScoped") (eq .ResourceType "directlyScoped") -}}
     targetResource = resources.{{.Type | storageToResource}}
     {{- end }}
 )
@@ -357,11 +359,20 @@ func (s *storeImpl) Upsert(ctx context.Context, obj *{{.Type}}) error {
     } else if !ok {
         return sac.ErrResourceAccessDenied
     }
-    {{- else if eq .ResourceType "globallyScoped" }}
+    {{- else if or (eq .ResourceType "globallyScoped") (eq .ResourceType "directlyScoped") }}
     scopeChecker := sac.GlobalAccessScopeChecker(ctx).AccessMode(storage.Access_READ_WRITE_ACCESS).Resource(targetResource)
     if ok, err := scopeChecker.Allowed(ctx); err != nil {
         return err
     } else if !ok {
+        return sac.ErrResourceAccessDenied
+    }
+    {{- end }}
+    {{ if eq .ResourceType "directlyScoped" -}}
+    eas, err := scopeChecker.EffectiveAccessScope(permissions.Modify(targetResource))
+    if err != nil {
+        return err
+    }
+    if !isInScope(obj, eas) {
         return sac.ErrResourceAccessDenied
     }
     {{- end}}
@@ -378,12 +389,23 @@ func (s *storeImpl) UpsertMany(ctx context.Context, objs []*{{.Type}}) error {
     } else if !ok {
         return sac.ErrResourceAccessDenied
     }
-    {{- else if eq .ResourceType "globallyScoped" }}
+    {{- else if or (eq .ResourceType "globallyScoped") (eq .ResourceType "directlyScoped") }}
     scopeChecker := sac.GlobalAccessScopeChecker(ctx).AccessMode(storage.Access_READ_WRITE_ACCESS).Resource(targetResource)
     if ok, err := scopeChecker.Allowed(ctx); err != nil {
         return err
     } else if !ok {
         return sac.ErrResourceAccessDenied
+    }
+    {{- end}}
+    {{ if eq .ResourceType "directlyScoped" -}}
+    eas, err := scopeChecker.EffectiveAccessScope(permissions.Modify(targetResource))
+    if err != nil {
+        return err
+    }
+    for _, obj := range objs {
+        if !isInScope(obj, eas) {
+            return sac.ErrResourceAccessDenied
+        }
     }
     {{- end}}
 

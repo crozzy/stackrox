@@ -12,6 +12,7 @@ import (
 	storage "github.com/stackrox/rox/generated/storage"
 	"github.com/stackrox/rox/pkg/features"
 	"github.com/stackrox/rox/pkg/postgres/pgtest"
+	"github.com/stackrox/rox/pkg/sac"
 	"github.com/stackrox/rox/pkg/testutils"
 	"github.com/stackrox/rox/pkg/testutils/envisolator"
 	"github.com/stretchr/testify/suite"
@@ -41,7 +42,7 @@ func (s *K8srolesStoreSuite) TearDownTest() {
 }
 
 func (s *K8srolesStoreSuite) TestStore() {
-	ctx := context.Background()
+	ctx := sac.WithAllAccess(context.Background())
 
 	source := pgtest.GetConnectionString(s.T())
 	config, err := pgxpool.ParseConfig(source)
@@ -61,6 +62,8 @@ func (s *K8srolesStoreSuite) TestStore() {
 	s.False(exists)
 	s.Nil(foundK8SRole)
 
+	withNoAccessCtx := sac.WithNoAccess(ctx)
+
 	s.NoError(store.Upsert(ctx, k8SRole))
 	foundK8SRole, exists, err = store.Get(ctx, k8SRole.GetId())
 	s.NoError(err)
@@ -75,6 +78,7 @@ func (s *K8srolesStoreSuite) TestStore() {
 	s.NoError(err)
 	s.True(k8SRoleExists)
 	s.NoError(store.Upsert(ctx, k8SRole))
+	s.ErrorIs(store.Upsert(withNoAccessCtx, k8SRole), sac.ErrResourceAccessDenied)
 
 	foundK8SRole, exists, err = store.Get(ctx, k8SRole.GetId())
 	s.NoError(err)
