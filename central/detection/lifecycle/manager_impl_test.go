@@ -114,22 +114,6 @@ func (suite *ManagerTestSuite) TestBaselineNotFound() {
 	suite.Equal(expectedError, err)
 }
 
-func (suite *ManagerTestSuite) TestBaselineShouldBeUpdated() {
-	key, indicator := makeIndicator()
-	baseline := &storage.ProcessBaseline{}
-	elements := fixtures.MakeBaselineItems(indicator.Signal.GetExecFilePath())
-	suite.baselines.EXPECT().GetProcessBaseline(gomock.Any(), key).Return(baseline, true, nil)
-	suite.baselines.EXPECT().UpdateProcessBaselineElements(gomock.Any(), key, elements, nil, true).Return(nil, nil)
-	_, err := suite.manager.checkAndUpdateBaseline(indicatorToBaselineKey(indicator), []*storage.ProcessIndicator{indicator})
-	suite.NoError(err)
-
-	expectedError := errors.New("Expected error")
-	suite.baselines.EXPECT().GetProcessBaseline(gomock.Any(), key).Return(baseline, true, nil)
-	suite.baselines.EXPECT().UpdateProcessBaselineElements(gomock.Any(), key, elements, nil, true).Return(nil, expectedError)
-	_, err = suite.manager.checkAndUpdateBaseline(indicatorToBaselineKey(indicator), []*storage.ProcessIndicator{indicator})
-	suite.Equal(expectedError, err)
-}
-
 func (suite *ManagerTestSuite) TestBaselineShouldPass() {
 	key, indicator := makeIndicator()
 	baseline := &storage.ProcessBaseline{Elements: fixtures.MakeBaselineElements(indicator.Signal.GetExecFilePath())}
