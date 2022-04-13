@@ -4,12 +4,7 @@ import (
 	"container/list"
 
 	"github.com/gogo/protobuf/types"
-	"github.com/stackrox/rox/pkg/logging"
 	"github.com/stackrox/rox/pkg/sync"
-)
-
-var (
-	log = logging.LoggerForModule()
 )
 
 type DeploymentObservation struct {
@@ -31,6 +26,7 @@ func NewObservationQueue() *DeploymentObservationQueue {
 	}
 }
 
+// InObservation returns if this deployment is still in the observation window
 func (q *DeploymentObservationQueue) InObservation(deploymentID string) bool {
 	deployMap, found := q.deploymentMap[deploymentID]
 
@@ -39,8 +35,8 @@ func (q *DeploymentObservationQueue) InObservation(deploymentID string) bool {
 	return !(found && deployMap == nil)
 }
 
+// Pull pulls an element from the deployment queue
 func (q *DeploymentObservationQueue) Pull() *DeploymentObservation {
-	log.Info("SHREWS -> pull")
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 
@@ -56,8 +52,8 @@ func (q *DeploymentObservationQueue) Pull() *DeploymentObservation {
 	return dep
 }
 
+// Peek returns the first item in the list without removing it
 func (q *DeploymentObservationQueue) Peek() *DeploymentObservation {
-	log.Info("SHREWS -> peek")
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 
@@ -77,14 +73,14 @@ func (q *DeploymentObservationQueue) Push(observation *DeploymentObservation) {
 	if _, found := q.deploymentMap[observation.DeploymentID]; found {
 		return
 	}
-	log.Infof("SHREWS -> push -- %s", observation)
 	depObj := q.queue.PushBack(observation)
+	// Reference the list object in the deployment map
 	q.deploymentMap[observation.DeploymentID] = depObj
 
 }
 
+// RemoveDeployment removes a deployment from the list and the map
 func (q *DeploymentObservationQueue) RemoveDeployment(deploymentID string) {
-	log.Infof("SHREWS -> removeDeployment %s", deploymentID)
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 

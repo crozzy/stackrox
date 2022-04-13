@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stackrox/rox/central/activecomponent/updater/aggregator"
 	deploymentDatastore "github.com/stackrox/rox/central/deployment/datastore"
-	queue "github.com/stackrox/rox/central/deployment/queue"
+	"github.com/stackrox/rox/central/deployment/queue"
 	"github.com/stackrox/rox/central/detection/alertmanager"
 	"github.com/stackrox/rox/central/detection/deploytime"
 	"github.com/stackrox/rox/central/detection/lifecycle/metrics"
@@ -71,7 +71,6 @@ type managerImpl struct {
 	indicatorRateLimiter  *rate.Limiter
 	indicatorFlushTicker  *time.Ticker
 	deploymentFlushTicker *time.Ticker
-	deploymentRateLimiter *rate.Limiter
 
 	policyAlertsLock          sync.RWMutex
 	removedOrDisabledPolicies set.StringSet
@@ -149,7 +148,6 @@ func indicatorToBaselineKey(indicator *storage.ProcessIndicator) processBaseline
 }
 
 func (m *managerImpl) flushDeploymentQueue() {
-	log.Info("SHREWS -> flushDeploymentQueue")
 	defer centralMetrics.SetFunctionSegmentDuration(time.Now(), "CheckAndUpdateBaseline")
 
 	for {
@@ -301,6 +299,7 @@ func (m *managerImpl) checkAndUpdateBaseline(baselineKey processBaselineKey, ind
 		return userBaseline, nil
 	}
 	// TODO (ROX-8655):  This may be dead with these changes.
+	log.Info("SHREWS did I get here?  I don't think I should")
 	_, err = m.baselines.UpdateProcessBaselineElements(lifecycleMgrCtx, key, elements, nil, true)
 	return userBaseline, err
 }

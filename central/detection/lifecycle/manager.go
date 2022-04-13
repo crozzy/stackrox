@@ -5,7 +5,7 @@ import (
 
 	"github.com/stackrox/rox/central/activecomponent/updater/aggregator"
 	deploymentDatastore "github.com/stackrox/rox/central/deployment/datastore"
-	queue "github.com/stackrox/rox/central/deployment/queue"
+	"github.com/stackrox/rox/central/deployment/queue"
 	"github.com/stackrox/rox/central/detection/alertmanager"
 	"github.com/stackrox/rox/central/detection/deploytime"
 	"github.com/stackrox/rox/central/detection/runtime"
@@ -63,7 +63,6 @@ func newManager(deploytimeDetector deploytime.Detector, runtimeDetector runtime.
 		indicatorRateLimiter:  rate.NewLimiter(rate.Every(rateLimitDuration), 5),
 		indicatorFlushTicker:  time.NewTicker(indicatorFlushTickerDuration),
 		deploymentFlushTicker: time.NewTicker(deploymentFlushTickerDuration),
-		deploymentRateLimiter: rate.NewLimiter(rate.Every(rateLimitDuration), 5),
 
 		removedOrDisabledPolicies: set.NewStringSet(),
 		processAggregator:         processAggregator,
