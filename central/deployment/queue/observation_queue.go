@@ -7,18 +7,21 @@ import (
 	"github.com/stackrox/rox/pkg/sync"
 )
 
+// DeploymentObservation struct used as element in the queue
 type DeploymentObservation struct {
 	DeploymentID   string
 	InObservation  bool
 	ObservationEnd *types.Timestamp
 }
 
+// DeploymentObservationQueue queue for deployments in observation window
 type DeploymentObservationQueue struct {
 	mutex         sync.Mutex
 	queue         *list.List
 	deploymentMap map[string]*list.Element
 }
 
+// NewObservationQueue created new instance of the queue
 func NewObservationQueue() *DeploymentObservationQueue {
 	return &DeploymentObservationQueue{
 		queue:         list.New(),
