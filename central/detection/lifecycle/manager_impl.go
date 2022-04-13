@@ -296,11 +296,8 @@ func (m *managerImpl) checkAndUpdateBaseline(baselineKey processBaselineKey, ind
 	if userBaseline || roxBaseline {
 		// We already checked if it's in the baseline and it is not, so reprocess risk to mark the results are suspicious if necessary
 		m.reprocessor.ReprocessRiskForDeployments(baselineKey.deploymentID)
-		return userBaseline, nil
 	}
-	// TODO (ROX-8655):  This may be dead with these changes.
-	log.Info("SHREWS did I get here?  I don't think I should")
-	_, err = m.baselines.UpdateProcessBaselineElements(lifecycleMgrCtx, key, elements, nil, true)
+
 	return userBaseline, err
 }
 
