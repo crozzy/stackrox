@@ -31,6 +31,9 @@ func NewObservationQueue() *DeploymentObservationQueue {
 
 // InObservation returns if this deployment is still in the observation window
 func (q *DeploymentObservationQueue) InObservation(deploymentID string) bool {
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+	
 	deployMap, found := q.deploymentMap[deploymentID]
 
 	// if we didn't find the deployment or the map points to nil, then we are
