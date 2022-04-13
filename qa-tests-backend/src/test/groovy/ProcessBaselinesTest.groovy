@@ -112,9 +112,12 @@ class ProcessBaselinesTest extends BaseSpecification {
                     (baseline.key.containerName.equalsIgnoreCase(containerName)))
         assert baseline.elementsList.find { it.element.processName == processName } != null
         // Check that startup processes are not impacted
-        Thread.sleep(10000)
+//         Thread.sleep(10000)
+        // sleep 5 seconds to allow for propagation to sensor
+        sleep 5000
         orchestrator.execInContainer(deployment, "ls")
-        Thread.sleep(60000)
+//         Thread.sleep(60000)
+        sleep 60000
         orchestrator.execInContainer(deployment, "pwd")
 
         then:

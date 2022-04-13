@@ -36,8 +36,8 @@ func (q *DeploymentObservationQueue) InObservation(deploymentID string) bool {
 
 	deployMap, found := q.deploymentMap[deploymentID]
 
-	// if we didn't find the deployment or the map points to nil, then we are
-	// not in observation
+	// If the deployment is found AND the map object is nil then we are no longer observing this deployment.
+	// Thus if (found && deployMap == nil) evaluates to true, then we want to return false.
 	return !(found && deployMap == nil)
 }
 
