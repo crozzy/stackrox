@@ -8,7 +8,7 @@
 {{- $ := . }}
 {{- $pks := .Schema.LocalPrimaryKeys }}
 
-{{- $singlePK := dict.nil }}
+{{- $singlePK := false }}
 {{- if eq (len $pks) 1 }}
 {{ $singlePK = index $pks 0 }}
 {{- end }}
@@ -359,23 +359,22 @@ func (s *storeImpl) Upsert(ctx context.Context, obj *{{.Type}}) error {
     } else if !ok {
         return sac.ErrResourceAccessDenied
     }
-    {{- else if or (.Obj.IsGloballyScoped) (.Obj.IsDirectlyScoped) }}
+    {{- else if .Obj.IsGloballyScoped }}
     scopeChecker := sac.GlobalAccessScopeChecker(ctx).AccessMode(storage.Access_READ_WRITE_ACCESS).Resource(targetResource)
+    {{- else if and (.Obj.IsDirectlyScoped) (.Obj.IsClusterScope) }}
+    scopeChecker := sac.GlobalAccessScopeChecker(ctx).AccessMode(storage.Access_READ_WRITE_ACCESS).Resource(targetResource).
+        ClusterID({{ "obj" | .Obj.GetClusterID }})
+    {{- else if and (.Obj.IsDirectlyScoped) (.Obj.IsNamespaceScope) }}
+    scopeChecker := sac.GlobalAccessScopeChecker(ctx).AccessMode(storage.Access_READ_WRITE_ACCESS).Resource(targetResource).
+        ClusterID({{ "obj" | .Obj.GetClusterID }}).Namespace({{ "obj" | .Obj.GetNamespace }})
+    {{- end }}
+    {{- if or (.Obj.IsGloballyScoped) (.Obj.IsDirectlyScoped) }}
     if ok, err := scopeChecker.Allowed(ctx); err != nil {
         return err
     } else if !ok {
         return sac.ErrResourceAccessDenied
     }
     {{- end }}
-    {{ if .Obj.IsDirectlyScoped -}}
-    eas, err := scopeChecker.EffectiveAccessScope(permissions.Modify(targetResource))
-    if err != nil {
-        return err
-    }
-    if !isInScope(obj, eas) {
-        return sac.ErrResourceAccessDenied
-    }
-    {{- end}}
 
     return s.upsert(ctx, obj)
 }
@@ -389,22 +388,26 @@ func (s *storeImpl) UpsertMany(ctx context.Context, objs []*{{.Type}}) error {
     } else if !ok {
         return sac.ErrResourceAccessDenied
     }
-    {{- else if or (.Obj.IsGloballyScoped) (.Obj.IsDirectlyScoped) }}
+    {{- else if .Obj.IsGloballyScoped }}
     scopeChecker := sac.GlobalAccessScopeChecker(ctx).AccessMode(storage.Access_READ_WRITE_ACCESS).Resource(targetResource)
     if ok, err := scopeChecker.Allowed(ctx); err != nil {
         return err
     } else if !ok {
         return sac.ErrResourceAccessDenied
     }
-    {{- end}}
-    {{ if .Obj.IsDirectlyScoped -}}
-    eas, err := scopeChecker.EffectiveAccessScope(permissions.Modify(targetResource))
-    if err != nil {
+    {{- else if .Obj.IsDirectlyScoped -}}
+    scopeChecker := sac.GlobalAccessScopeChecker(ctx).AccessMode(storage.Access_READ_WRITE_ACCESS).Resource(targetResource)
+    if ok, err := scopeChecker.Allowed(ctx); err != nil {
         return err
-    }
-    for _, obj := range objs {
-        if !isInScope(obj, eas) {
-            return sac.ErrResourceAccessDenied
+    } else if !ok {
+        eas, err := scopeChecker.EffectiveAccessScope(permissions.Modify(targetResource))
+        if err != nil {
+            return err
+        }
+        for _, obj := range objs {
+            if !isInScope(obj, eas) {
+                return sac.ErrResourceAccessDenied
+            }
         }
     }
     {{- end}}
@@ -698,25 +701,22 @@ func (s *storeImpl) Walk(ctx context.Context, fn func(obj *{{.Type}}) error) err
 }
 
 {{ if .Obj.IsDirectlyScoped }}
-    func isInScope(obj *{{.Type}}, eas *effectiveaccessscope.ScopeTree) bool {
+func isInScope(obj *{{.Type}}, eas *effectiveaccessscope.ScopeTree) bool {
     if eas.State == effectiveaccessscope.Included {
         return true
     }
-    if eas.State == effectiveaccessscope.Excluded {
-        return false
-    }
-    clusterId := {{ .Obj.GetClusterID }}
+    clusterId := {{ "obj" | .Obj.GetClusterID }}
     cluster := eas.GetClusterByID(clusterId)
     {{ if .Obj.IsClusterScope -}}
-    return cluster.State == effectiveaccessscope.Included
+    return cluster != nil && cluster.State == effectiveaccessscope.Included
     {{  else -}}
+    if cluster == nil || cluster.State == effectiveaccessscope.Excluded {
+        return false
+    }
     if cluster.State == effectiveaccessscope.Included {
         return true
     }
-    if cluster.State == effectiveaccessscope.Excluded {
-        return false
-    }
-    namespaceName := {{ .Obj.GetNamespace }}
+    namespaceName := {{ "obj" | .Obj.GetNamespace }}
     return cluster.Namespaces[namespaceName].State == effectiveaccessscope.Included
     {{- end }}
 }

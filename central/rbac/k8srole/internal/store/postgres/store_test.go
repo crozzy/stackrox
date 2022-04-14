@@ -63,6 +63,19 @@ func (s *K8srolesStoreSuite) TestStore() {
 	s.Nil(foundK8SRole)
 
 	withNoAccessCtx := sac.WithNoAccess(ctx)
+	ctxWithAccessToDifferentNs := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys(k8SRole.GetClusterId()),
+			sac.NamespaceScopeKeys("unknown ns")))
+	ctxWithAccess := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys(k8SRole.GetClusterId()),
+			sac.NamespaceScopeKeys(k8SRole.GetNamespace()),
+		))
 
 	s.NoError(store.Upsert(ctx, k8SRole))
 	foundK8SRole, exists, err = store.Get(ctx, k8SRole.GetId())
@@ -79,6 +92,8 @@ func (s *K8srolesStoreSuite) TestStore() {
 	s.True(k8SRoleExists)
 	s.NoError(store.Upsert(ctx, k8SRole))
 	s.ErrorIs(store.Upsert(withNoAccessCtx, k8SRole), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.Upsert(ctxWithAccessToDifferentNs, k8SRole), sac.ErrResourceAccessDenied)
+	s.NoError(store.Upsert(ctxWithAccess, k8SRole))
 
 	foundK8SRole, exists, err = store.Get(ctx, k8SRole.GetId())
 	s.NoError(err)
@@ -97,7 +112,8 @@ func (s *K8srolesStoreSuite) TestStore() {
 		s.NoError(testutils.FullInit(k8SRole, testutils.UniqueInitializer(), testutils.JSONFieldsFilter))
 		k8SRoles = append(k8SRoles, k8SRole)
 	}
-
+	s.ErrorIs(store.UpsertMany(ctxWithAccessToDifferentNs, k8SRoles), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.UpsertMany(ctxWithAccess, k8SRoles), sac.ErrResourceAccessDenied)
 	s.NoError(store.UpsertMany(ctx, k8SRoles))
 
 	k8SRoleCount, err = store.Count(ctx)

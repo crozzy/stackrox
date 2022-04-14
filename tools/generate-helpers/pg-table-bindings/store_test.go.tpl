@@ -77,6 +77,23 @@ func (s *{{$namePrefix}}StoreSuite) TestStore() {
     {{- if or (.Obj.IsGloballyScoped) (.Obj.HasPermissionChecker) (.Obj.IsDirectlyScoped)}}
     withNoAccessCtx := sac.WithNoAccess(ctx)
     {{- end }}
+	{{- if .Obj.IsDirectlyScoped }}
+	ctxWithAccessToDifferentNs := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys({{ $name | .Obj.GetClusterID }}),
+			sac.NamespaceScopeKeys("unknown ns")))
+	ctxWithAccess := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys({{ $name | .Obj.GetClusterID }}),
+			{{- if .Obj.IsNamespaceScope }}
+			sac.NamespaceScopeKeys({{ $name | .Obj.GetNamespace }}),
+			{{- end }}
+	))
+	{{- end }}
 
 	s.NoError(store.Upsert(ctx, {{$name}}))
 	found{{.TrimmedType|upperCamelCase}}, exists, err = store.Get(ctx, {{template "paramList" $}})
@@ -101,6 +118,10 @@ func (s *{{$namePrefix}}StoreSuite) TestStore() {
     {{- if or (.Obj.IsGloballyScoped) (.Obj.HasPermissionChecker) (.Obj.IsDirectlyScoped)}}
 	s.ErrorIs(store.Upsert(withNoAccessCtx, {{$name}}), sac.ErrResourceAccessDenied)
     {{- end }}
+	{{- if (.Obj.IsDirectlyScoped)}}
+	s.ErrorIs(store.Upsert(ctxWithAccessToDifferentNs, {{ $name }}), sac.ErrResourceAccessDenied)
+	s.NoError(store.Upsert(ctxWithAccess, {{ $name }}))
+	{{- end }}
 
 	found{{.TrimmedType|upperCamelCase}}, exists, err = store.Get(ctx, {{template "paramList" $}})
 	s.NoError(err)
@@ -124,7 +145,11 @@ func (s *{{$namePrefix}}StoreSuite) TestStore() {
         {{$name}}s = append({{.TrimmedType|lowerCamelCase}}s, {{.TrimmedType|lowerCamelCase}})
     }
 
-    s.NoError(store.UpsertMany(ctx, {{.TrimmedType|lowerCamelCase}}s))
+	{{- if (.Obj.IsDirectlyScoped)}}
+	s.ErrorIs(store.UpsertMany(ctxWithAccessToDifferentNs, {{.TrimmedType|lowerCamelCase}}s), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.UpsertMany(ctxWithAccess, {{.TrimmedType|lowerCamelCase}}s), sac.ErrResourceAccessDenied)
+	{{- end }}
+	s.NoError(store.UpsertMany(ctx, {{.TrimmedType|lowerCamelCase}}s))
 
     {{.TrimmedType|lowerCamelCase}}Count, err = store.Count(ctx)
     s.NoError(err)

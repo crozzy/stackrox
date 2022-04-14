@@ -63,6 +63,19 @@ func (s *PodsStoreSuite) TestStore() {
 	s.Nil(foundPod)
 
 	withNoAccessCtx := sac.WithNoAccess(ctx)
+	ctxWithAccessToDifferentNs := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys(pod.GetClusterId()),
+			sac.NamespaceScopeKeys("unknown ns")))
+	ctxWithAccess := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys(pod.GetClusterId()),
+			sac.NamespaceScopeKeys(pod.GetNamespace()),
+		))
 
 	s.NoError(store.Upsert(ctx, pod))
 	foundPod, exists, err = store.Get(ctx, pod.GetId())
@@ -79,6 +92,8 @@ func (s *PodsStoreSuite) TestStore() {
 	s.True(podExists)
 	s.NoError(store.Upsert(ctx, pod))
 	s.ErrorIs(store.Upsert(withNoAccessCtx, pod), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.Upsert(ctxWithAccessToDifferentNs, pod), sac.ErrResourceAccessDenied)
+	s.NoError(store.Upsert(ctxWithAccess, pod))
 
 	foundPod, exists, err = store.Get(ctx, pod.GetId())
 	s.NoError(err)
@@ -97,7 +112,8 @@ func (s *PodsStoreSuite) TestStore() {
 		s.NoError(testutils.FullInit(pod, testutils.UniqueInitializer(), testutils.JSONFieldsFilter))
 		pods = append(pods, pod)
 	}
-
+	s.ErrorIs(store.UpsertMany(ctxWithAccessToDifferentNs, pods), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.UpsertMany(ctxWithAccess, pods), sac.ErrResourceAccessDenied)
 	s.NoError(store.UpsertMany(ctx, pods))
 
 	podCount, err = store.Count(ctx)

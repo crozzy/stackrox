@@ -63,6 +63,19 @@ func (s *RolebindingsStoreSuite) TestStore() {
 	s.Nil(foundK8SRoleBinding)
 
 	withNoAccessCtx := sac.WithNoAccess(ctx)
+	ctxWithAccessToDifferentNs := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys(k8SRoleBinding.GetClusterId()),
+			sac.NamespaceScopeKeys("unknown ns")))
+	ctxWithAccess := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys(k8SRoleBinding.GetClusterId()),
+			sac.NamespaceScopeKeys(k8SRoleBinding.GetNamespace()),
+		))
 
 	s.NoError(store.Upsert(ctx, k8SRoleBinding))
 	foundK8SRoleBinding, exists, err = store.Get(ctx, k8SRoleBinding.GetId())
@@ -79,6 +92,8 @@ func (s *RolebindingsStoreSuite) TestStore() {
 	s.True(k8SRoleBindingExists)
 	s.NoError(store.Upsert(ctx, k8SRoleBinding))
 	s.ErrorIs(store.Upsert(withNoAccessCtx, k8SRoleBinding), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.Upsert(ctxWithAccessToDifferentNs, k8SRoleBinding), sac.ErrResourceAccessDenied)
+	s.NoError(store.Upsert(ctxWithAccess, k8SRoleBinding))
 
 	foundK8SRoleBinding, exists, err = store.Get(ctx, k8SRoleBinding.GetId())
 	s.NoError(err)
@@ -97,7 +112,8 @@ func (s *RolebindingsStoreSuite) TestStore() {
 		s.NoError(testutils.FullInit(k8SRoleBinding, testutils.UniqueInitializer(), testutils.JSONFieldsFilter))
 		k8SRoleBindings = append(k8SRoleBindings, k8SRoleBinding)
 	}
-
+	s.ErrorIs(store.UpsertMany(ctxWithAccessToDifferentNs, k8SRoleBindings), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.UpsertMany(ctxWithAccess, k8SRoleBindings), sac.ErrResourceAccessDenied)
 	s.NoError(store.UpsertMany(ctx, k8SRoleBindings))
 
 	k8SRoleBindingCount, err = store.Count(ctx)

@@ -63,6 +63,18 @@ func (s *ClustersStoreSuite) TestStore() {
 	s.Nil(foundCluster)
 
 	withNoAccessCtx := sac.WithNoAccess(ctx)
+	ctxWithAccessToDifferentNs := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys(cluster.GetId()),
+			sac.NamespaceScopeKeys("unknown ns")))
+	ctxWithAccess := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys(cluster.GetId()),
+		))
 
 	s.NoError(store.Upsert(ctx, cluster))
 	foundCluster, exists, err = store.Get(ctx, cluster.GetId())
@@ -79,6 +91,8 @@ func (s *ClustersStoreSuite) TestStore() {
 	s.True(clusterExists)
 	s.NoError(store.Upsert(ctx, cluster))
 	s.ErrorIs(store.Upsert(withNoAccessCtx, cluster), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.Upsert(ctxWithAccessToDifferentNs, cluster), sac.ErrResourceAccessDenied)
+	s.NoError(store.Upsert(ctxWithAccess, cluster))
 
 	foundCluster, exists, err = store.Get(ctx, cluster.GetId())
 	s.NoError(err)
@@ -97,7 +111,8 @@ func (s *ClustersStoreSuite) TestStore() {
 		s.NoError(testutils.FullInit(cluster, testutils.UniqueInitializer(), testutils.JSONFieldsFilter))
 		clusters = append(clusters, cluster)
 	}
-
+	s.ErrorIs(store.UpsertMany(ctxWithAccessToDifferentNs, clusters), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.UpsertMany(ctxWithAccess, clusters), sac.ErrResourceAccessDenied)
 	s.NoError(store.UpsertMany(ctx, clusters))
 
 	clusterCount, err = store.Count(ctx)

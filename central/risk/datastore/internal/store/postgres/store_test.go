@@ -63,6 +63,19 @@ func (s *RiskStoreSuite) TestStore() {
 	s.Nil(foundRisk)
 
 	withNoAccessCtx := sac.WithNoAccess(ctx)
+	ctxWithAccessToDifferentNs := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys(risk.GetSubject().GetClusterId()),
+			sac.NamespaceScopeKeys("unknown ns")))
+	ctxWithAccess := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys(risk.GetSubject().GetClusterId()),
+			sac.NamespaceScopeKeys(risk.GetSubject().GetNamespace()),
+		))
 
 	s.NoError(store.Upsert(ctx, risk))
 	foundRisk, exists, err = store.Get(ctx, risk.GetId())
@@ -79,6 +92,8 @@ func (s *RiskStoreSuite) TestStore() {
 	s.True(riskExists)
 	s.NoError(store.Upsert(ctx, risk))
 	s.ErrorIs(store.Upsert(withNoAccessCtx, risk), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.Upsert(ctxWithAccessToDifferentNs, risk), sac.ErrResourceAccessDenied)
+	s.NoError(store.Upsert(ctxWithAccess, risk))
 
 	foundRisk, exists, err = store.Get(ctx, risk.GetId())
 	s.NoError(err)
@@ -97,7 +112,8 @@ func (s *RiskStoreSuite) TestStore() {
 		s.NoError(testutils.FullInit(risk, testutils.UniqueInitializer(), testutils.JSONFieldsFilter))
 		risks = append(risks, risk)
 	}
-
+	s.ErrorIs(store.UpsertMany(ctxWithAccessToDifferentNs, risks), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.UpsertMany(ctxWithAccess, risks), sac.ErrResourceAccessDenied)
 	s.NoError(store.UpsertMany(ctx, risks))
 
 	riskCount, err = store.Count(ctx)

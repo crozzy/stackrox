@@ -63,6 +63,19 @@ func (s *ProcessIndicatorsStoreSuite) TestStore() {
 	s.Nil(foundProcessIndicator)
 
 	withNoAccessCtx := sac.WithNoAccess(ctx)
+	ctxWithAccessToDifferentNs := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys(processIndicator.GetClusterId()),
+			sac.NamespaceScopeKeys("unknown ns")))
+	ctxWithAccess := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys(processIndicator.GetClusterId()),
+			sac.NamespaceScopeKeys(processIndicator.GetNamespace()),
+		))
 
 	s.NoError(store.Upsert(ctx, processIndicator))
 	foundProcessIndicator, exists, err = store.Get(ctx, processIndicator.GetId())
@@ -79,6 +92,8 @@ func (s *ProcessIndicatorsStoreSuite) TestStore() {
 	s.True(processIndicatorExists)
 	s.NoError(store.Upsert(ctx, processIndicator))
 	s.ErrorIs(store.Upsert(withNoAccessCtx, processIndicator), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.Upsert(ctxWithAccessToDifferentNs, processIndicator), sac.ErrResourceAccessDenied)
+	s.NoError(store.Upsert(ctxWithAccess, processIndicator))
 
 	foundProcessIndicator, exists, err = store.Get(ctx, processIndicator.GetId())
 	s.NoError(err)
@@ -97,7 +112,8 @@ func (s *ProcessIndicatorsStoreSuite) TestStore() {
 		s.NoError(testutils.FullInit(processIndicator, testutils.UniqueInitializer(), testutils.JSONFieldsFilter))
 		processIndicators = append(processIndicators, processIndicator)
 	}
-
+	s.ErrorIs(store.UpsertMany(ctxWithAccessToDifferentNs, processIndicators), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.UpsertMany(ctxWithAccess, processIndicators), sac.ErrResourceAccessDenied)
 	s.NoError(store.UpsertMany(ctx, processIndicators))
 
 	processIndicatorCount, err = store.Count(ctx)

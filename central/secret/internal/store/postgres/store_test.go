@@ -63,6 +63,19 @@ func (s *SecretsStoreSuite) TestStore() {
 	s.Nil(foundSecret)
 
 	withNoAccessCtx := sac.WithNoAccess(ctx)
+	ctxWithAccessToDifferentNs := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys(secret.GetClusterId()),
+			sac.NamespaceScopeKeys("unknown ns")))
+	ctxWithAccess := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys(secret.GetClusterId()),
+			sac.NamespaceScopeKeys(secret.GetNamespace()),
+		))
 
 	s.NoError(store.Upsert(ctx, secret))
 	foundSecret, exists, err = store.Get(ctx, secret.GetId())
@@ -79,6 +92,8 @@ func (s *SecretsStoreSuite) TestStore() {
 	s.True(secretExists)
 	s.NoError(store.Upsert(ctx, secret))
 	s.ErrorIs(store.Upsert(withNoAccessCtx, secret), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.Upsert(ctxWithAccessToDifferentNs, secret), sac.ErrResourceAccessDenied)
+	s.NoError(store.Upsert(ctxWithAccess, secret))
 
 	foundSecret, exists, err = store.Get(ctx, secret.GetId())
 	s.NoError(err)
@@ -97,7 +112,8 @@ func (s *SecretsStoreSuite) TestStore() {
 		s.NoError(testutils.FullInit(secret, testutils.UniqueInitializer(), testutils.JSONFieldsFilter))
 		secrets = append(secrets, secret)
 	}
-
+	s.ErrorIs(store.UpsertMany(ctxWithAccessToDifferentNs, secrets), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.UpsertMany(ctxWithAccess, secrets), sac.ErrResourceAccessDenied)
 	s.NoError(store.UpsertMany(ctx, secrets))
 
 	secretCount, err = store.Count(ctx)

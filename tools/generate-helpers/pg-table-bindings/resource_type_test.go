@@ -38,7 +38,7 @@ func TestGetResourceType(t *testing.T) {
 				tc.permissionChecker,
 				tc.joinTable,
 			)
-			assert.Equal(t, tc.resourceType.String(), actual.String())
+			assert.Equal(t, tc.resourceType, actual)
 		})
 	}
 

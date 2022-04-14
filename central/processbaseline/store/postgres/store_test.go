@@ -63,6 +63,19 @@ func (s *ProcessbaselinesStoreSuite) TestStore() {
 	s.Nil(foundProcessBaseline)
 
 	withNoAccessCtx := sac.WithNoAccess(ctx)
+	ctxWithAccessToDifferentNs := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys(processBaseline.GetKey().GetClusterId()),
+			sac.NamespaceScopeKeys("unknown ns")))
+	ctxWithAccess := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys(processBaseline.GetKey().GetClusterId()),
+			sac.NamespaceScopeKeys(processBaseline.GetKey().GetNamespace()),
+		))
 
 	s.NoError(store.Upsert(ctx, processBaseline))
 	foundProcessBaseline, exists, err = store.Get(ctx, processBaseline.GetId())
@@ -79,6 +92,8 @@ func (s *ProcessbaselinesStoreSuite) TestStore() {
 	s.True(processBaselineExists)
 	s.NoError(store.Upsert(ctx, processBaseline))
 	s.ErrorIs(store.Upsert(withNoAccessCtx, processBaseline), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.Upsert(ctxWithAccessToDifferentNs, processBaseline), sac.ErrResourceAccessDenied)
+	s.NoError(store.Upsert(ctxWithAccess, processBaseline))
 
 	foundProcessBaseline, exists, err = store.Get(ctx, processBaseline.GetId())
 	s.NoError(err)
@@ -97,7 +112,8 @@ func (s *ProcessbaselinesStoreSuite) TestStore() {
 		s.NoError(testutils.FullInit(processBaseline, testutils.UniqueInitializer(), testutils.JSONFieldsFilter))
 		processBaselines = append(processBaselines, processBaseline)
 	}
-
+	s.ErrorIs(store.UpsertMany(ctxWithAccessToDifferentNs, processBaselines), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.UpsertMany(ctxWithAccess, processBaselines), sac.ErrResourceAccessDenied)
 	s.NoError(store.UpsertMany(ctx, processBaselines))
 
 	processBaselineCount, err = store.Count(ctx)

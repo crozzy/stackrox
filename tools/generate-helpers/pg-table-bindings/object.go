@@ -12,12 +12,12 @@ type object struct {
 	schema                   *walker.Schema
 }
 
-func (o object) GetClusterID() string {
-	return clusterGetter(o.schema)
+func (o object) GetClusterID(name string) string {
+	return clusterGetter(name, o.schema)
 }
 
-func (o object) GetNamespace() string {
-	return namespaceGetter(o.schema)
+func (o object) GetNamespace(name string) string {
+	return namespaceGetter(name, o.schema)
 }
 
 func (o object) IsDirectlyScoped() bool {
@@ -49,6 +49,9 @@ func (o object) IsGlobalScope() bool {
 }
 
 func (o object) isScope(scope permissions.ResourceScope) bool {
+	if o.isJoinTable || o.permissionCheckerEnabled {
+		return false
+	}
 	resource := storageToResource(o.storageType)
 	metadata := resourceMetadataFromString(resource)
 	return metadata.GetScope() == scope

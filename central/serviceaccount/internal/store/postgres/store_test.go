@@ -63,6 +63,19 @@ func (s *ServiceaccountsStoreSuite) TestStore() {
 	s.Nil(foundServiceAccount)
 
 	withNoAccessCtx := sac.WithNoAccess(ctx)
+	ctxWithAccessToDifferentNs := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys(serviceAccount.GetClusterId()),
+			sac.NamespaceScopeKeys("unknown ns")))
+	ctxWithAccess := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys(serviceAccount.GetClusterId()),
+			sac.NamespaceScopeKeys(serviceAccount.GetNamespace()),
+		))
 
 	s.NoError(store.Upsert(ctx, serviceAccount))
 	foundServiceAccount, exists, err = store.Get(ctx, serviceAccount.GetId())
@@ -79,6 +92,8 @@ func (s *ServiceaccountsStoreSuite) TestStore() {
 	s.True(serviceAccountExists)
 	s.NoError(store.Upsert(ctx, serviceAccount))
 	s.ErrorIs(store.Upsert(withNoAccessCtx, serviceAccount), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.Upsert(ctxWithAccessToDifferentNs, serviceAccount), sac.ErrResourceAccessDenied)
+	s.NoError(store.Upsert(ctxWithAccess, serviceAccount))
 
 	foundServiceAccount, exists, err = store.Get(ctx, serviceAccount.GetId())
 	s.NoError(err)
@@ -97,7 +112,8 @@ func (s *ServiceaccountsStoreSuite) TestStore() {
 		s.NoError(testutils.FullInit(serviceAccount, testutils.UniqueInitializer(), testutils.JSONFieldsFilter))
 		serviceAccounts = append(serviceAccounts, serviceAccount)
 	}
-
+	s.ErrorIs(store.UpsertMany(ctxWithAccessToDifferentNs, serviceAccounts), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.UpsertMany(ctxWithAccess, serviceAccounts), sac.ErrResourceAccessDenied)
 	s.NoError(store.UpsertMany(ctx, serviceAccounts))
 
 	serviceAccountCount, err = store.Count(ctx)

@@ -63,6 +63,19 @@ func (s *NamespacesStoreSuite) TestStore() {
 	s.Nil(foundNamespaceMetadata)
 
 	withNoAccessCtx := sac.WithNoAccess(ctx)
+	ctxWithAccessToDifferentNs := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys(namespaceMetadata.GetClusterId()),
+			sac.NamespaceScopeKeys("unknown ns")))
+	ctxWithAccess := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys(namespaceMetadata.GetClusterId()),
+			sac.NamespaceScopeKeys(namespaceMetadata.GetId()),
+		))
 
 	s.NoError(store.Upsert(ctx, namespaceMetadata))
 	foundNamespaceMetadata, exists, err = store.Get(ctx, namespaceMetadata.GetId())
@@ -79,6 +92,8 @@ func (s *NamespacesStoreSuite) TestStore() {
 	s.True(namespaceMetadataExists)
 	s.NoError(store.Upsert(ctx, namespaceMetadata))
 	s.ErrorIs(store.Upsert(withNoAccessCtx, namespaceMetadata), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.Upsert(ctxWithAccessToDifferentNs, namespaceMetadata), sac.ErrResourceAccessDenied)
+	s.NoError(store.Upsert(ctxWithAccess, namespaceMetadata))
 
 	foundNamespaceMetadata, exists, err = store.Get(ctx, namespaceMetadata.GetId())
 	s.NoError(err)
@@ -97,7 +112,8 @@ func (s *NamespacesStoreSuite) TestStore() {
 		s.NoError(testutils.FullInit(namespaceMetadata, testutils.UniqueInitializer(), testutils.JSONFieldsFilter))
 		namespaceMetadatas = append(namespaceMetadatas, namespaceMetadata)
 	}
-
+	s.ErrorIs(store.UpsertMany(ctxWithAccessToDifferentNs, namespaceMetadatas), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.UpsertMany(ctxWithAccess, namespaceMetadatas), sac.ErrResourceAccessDenied)
 	s.NoError(store.UpsertMany(ctx, namespaceMetadatas))
 
 	namespaceMetadataCount, err = store.Count(ctx)

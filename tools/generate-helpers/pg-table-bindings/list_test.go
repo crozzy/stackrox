@@ -30,13 +30,13 @@ func TestClusterGetter(t *testing.T) {
 		&storage.ProcessBaseline{}: "obj.GetKey().GetClusterId()",
 	} {
 		t.Run(fmt.Sprintf("%T -> %s", typ, getter), func(t *testing.T) {
-			assert.Equal(t, getter, clusterGetter(walker.Walk(reflect.TypeOf(typ), "")))
+			assert.Equal(t, getter, clusterGetter("obj", walker.Walk(reflect.TypeOf(typ), "")))
 		})
 	}
 
 	t.Run("panics for not directly scoped type", func(t *testing.T) {
-		assert.Panics(t, func() { clusterGetter(walker.Walk(reflect.TypeOf(&storage.CVE{}), "")) })
-		assert.Panics(t, func() { clusterGetter(walker.Walk(reflect.TypeOf(&storage.Email{}), "")) })
+		assert.Panics(t, func() { clusterGetter("obj", walker.Walk(reflect.TypeOf(&storage.CVE{}), "")) })
+		assert.Panics(t, func() { clusterGetter("obj", walker.Walk(reflect.TypeOf(&storage.Email{}), "")) })
 	})
 }
 
@@ -50,7 +50,7 @@ func TestNamespaceGetter(t *testing.T) {
 		&storage.Risk{}:              "obj.GetSubject().GetNamespace()",
 	} {
 		t.Run(fmt.Sprintf("%T -> %s", typ, getter), func(t *testing.T) {
-			assert.Equal(t, getter, namespaceGetter(walker.Walk(reflect.TypeOf(typ), "")))
+			assert.Equal(t, getter, namespaceGetter("obj", walker.Walk(reflect.TypeOf(typ), "")))
 		})
 	}
 }

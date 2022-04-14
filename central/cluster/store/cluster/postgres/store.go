@@ -256,17 +256,11 @@ func (s *storeImpl) upsert(ctx context.Context, objs ...*storage.Cluster) error 
 func (s *storeImpl) Upsert(ctx context.Context, obj *storage.Cluster) error {
 	defer metrics.SetPostgresOperationDurationTime(time.Now(), ops.Upsert, "Cluster")
 
-	scopeChecker := sac.GlobalAccessScopeChecker(ctx).AccessMode(storage.Access_READ_WRITE_ACCESS).Resource(targetResource)
+	scopeChecker := sac.GlobalAccessScopeChecker(ctx).AccessMode(storage.Access_READ_WRITE_ACCESS).Resource(targetResource).
+		ClusterID(obj.GetId())
 	if ok, err := scopeChecker.Allowed(ctx); err != nil {
 		return err
 	} else if !ok {
-		return sac.ErrResourceAccessDenied
-	}
-	eas, err := scopeChecker.EffectiveAccessScope(permissions.Modify(targetResource))
-	if err != nil {
-		return err
-	}
-	if !isInScope(obj, eas) {
 		return sac.ErrResourceAccessDenied
 	}
 
@@ -280,15 +274,14 @@ func (s *storeImpl) UpsertMany(ctx context.Context, objs []*storage.Cluster) err
 	if ok, err := scopeChecker.Allowed(ctx); err != nil {
 		return err
 	} else if !ok {
-		return sac.ErrResourceAccessDenied
-	}
-	eas, err := scopeChecker.EffectiveAccessScope(permissions.Modify(targetResource))
-	if err != nil {
-		return err
-	}
-	for _, obj := range objs {
-		if !isInScope(obj, eas) {
-			return sac.ErrResourceAccessDenied
+		eas, err := scopeChecker.EffectiveAccessScope(permissions.Modify(targetResource))
+		if err != nil {
+			return err
+		}
+		for _, obj := range objs {
+			if !isInScope(obj, eas) {
+				return sac.ErrResourceAccessDenied
+			}
 		}
 	}
 
@@ -481,12 +474,9 @@ func isInScope(obj *storage.Cluster, eas *effectiveaccessscope.ScopeTree) bool {
 	if eas.State == effectiveaccessscope.Included {
 		return true
 	}
-	if eas.State == effectiveaccessscope.Excluded {
-		return false
-	}
 	clusterId := obj.GetId()
 	cluster := eas.GetClusterByID(clusterId)
-	return cluster.State == effectiveaccessscope.Included
+	return cluster != nil && cluster.State == effectiveaccessscope.Included
 
 }
 

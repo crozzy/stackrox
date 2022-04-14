@@ -63,6 +63,19 @@ func (s *AlertsStoreSuite) TestStore() {
 	s.Nil(foundAlert)
 
 	withNoAccessCtx := sac.WithNoAccess(ctx)
+	ctxWithAccessToDifferentNs := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys(alert.GetClusterId()),
+			sac.NamespaceScopeKeys("unknown ns")))
+	ctxWithAccess := sac.WithGlobalAccessScopeChecker(context.Background(),
+		sac.AllowFixedScopes(
+			sac.AccessModeScopeKeys(storage.Access_READ_WRITE_ACCESS),
+			sac.ResourceScopeKeys(targetResource),
+			sac.ClusterScopeKeys(alert.GetClusterId()),
+			sac.NamespaceScopeKeys(alert.GetNamespace()),
+		))
 
 	s.NoError(store.Upsert(ctx, alert))
 	foundAlert, exists, err = store.Get(ctx, alert.GetId())
@@ -79,6 +92,8 @@ func (s *AlertsStoreSuite) TestStore() {
 	s.True(alertExists)
 	s.NoError(store.Upsert(ctx, alert))
 	s.ErrorIs(store.Upsert(withNoAccessCtx, alert), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.Upsert(ctxWithAccessToDifferentNs, alert), sac.ErrResourceAccessDenied)
+	s.NoError(store.Upsert(ctxWithAccess, alert))
 
 	foundAlert, exists, err = store.Get(ctx, alert.GetId())
 	s.NoError(err)
@@ -97,7 +112,8 @@ func (s *AlertsStoreSuite) TestStore() {
 		s.NoError(testutils.FullInit(alert, testutils.UniqueInitializer(), testutils.JSONFieldsFilter))
 		alerts = append(alerts, alert)
 	}
-
+	s.ErrorIs(store.UpsertMany(ctxWithAccessToDifferentNs, alerts), sac.ErrResourceAccessDenied)
+	s.ErrorIs(store.UpsertMany(ctxWithAccess, alerts), sac.ErrResourceAccessDenied)
 	s.NoError(store.UpsertMany(ctx, alerts))
 
 	alertCount, err = store.Count(ctx)

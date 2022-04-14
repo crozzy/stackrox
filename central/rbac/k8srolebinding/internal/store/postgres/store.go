@@ -356,17 +356,11 @@ func (s *storeImpl) upsert(ctx context.Context, objs ...*storage.K8SRoleBinding)
 func (s *storeImpl) Upsert(ctx context.Context, obj *storage.K8SRoleBinding) error {
 	defer metrics.SetPostgresOperationDurationTime(time.Now(), ops.Upsert, "K8SRoleBinding")
 
-	scopeChecker := sac.GlobalAccessScopeChecker(ctx).AccessMode(storage.Access_READ_WRITE_ACCESS).Resource(targetResource)
+	scopeChecker := sac.GlobalAccessScopeChecker(ctx).AccessMode(storage.Access_READ_WRITE_ACCESS).Resource(targetResource).
+		ClusterID(obj.GetClusterId()).Namespace(obj.GetNamespace())
 	if ok, err := scopeChecker.Allowed(ctx); err != nil {
 		return err
 	} else if !ok {
-		return sac.ErrResourceAccessDenied
-	}
-	eas, err := scopeChecker.EffectiveAccessScope(permissions.Modify(targetResource))
-	if err != nil {
-		return err
-	}
-	if !isInScope(obj, eas) {
 		return sac.ErrResourceAccessDenied
 	}
 
@@ -380,15 +374,14 @@ func (s *storeImpl) UpsertMany(ctx context.Context, objs []*storage.K8SRoleBindi
 	if ok, err := scopeChecker.Allowed(ctx); err != nil {
 		return err
 	} else if !ok {
-		return sac.ErrResourceAccessDenied
-	}
-	eas, err := scopeChecker.EffectiveAccessScope(permissions.Modify(targetResource))
-	if err != nil {
-		return err
-	}
-	for _, obj := range objs {
-		if !isInScope(obj, eas) {
-			return sac.ErrResourceAccessDenied
+		eas, err := scopeChecker.EffectiveAccessScope(permissions.Modify(targetResource))
+		if err != nil {
+			return err
+		}
+		for _, obj := range objs {
+			if !isInScope(obj, eas) {
+				return sac.ErrResourceAccessDenied
+			}
 		}
 	}
 
@@ -581,16 +574,13 @@ func isInScope(obj *storage.K8SRoleBinding, eas *effectiveaccessscope.ScopeTree)
 	if eas.State == effectiveaccessscope.Included {
 		return true
 	}
-	if eas.State == effectiveaccessscope.Excluded {
-		return false
-	}
 	clusterId := obj.GetClusterId()
 	cluster := eas.GetClusterByID(clusterId)
+	if cluster == nil || cluster.State == effectiveaccessscope.Excluded {
+		return false
+	}
 	if cluster.State == effectiveaccessscope.Included {
 		return true
-	}
-	if cluster.State == effectiveaccessscope.Excluded {
-		return false
 	}
 	namespaceName := obj.GetNamespace()
 	return cluster.Namespaces[namespaceName].State == effectiveaccessscope.Included
