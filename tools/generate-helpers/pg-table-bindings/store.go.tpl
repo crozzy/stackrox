@@ -29,9 +29,9 @@ import (
     "github.com/stackrox/rox/pkg/logging"
     ops "github.com/stackrox/rox/pkg/metrics"
     "github.com/stackrox/rox/pkg/postgres/pgutils"
-    {{ if or (eq .ResourceType "globallyScoped") (eq .ResourceType "permissionChecker") -}}
+    {{ if or (.Obj.IsGloballyScoped) (.Obj.HasPermissionChecker) -}}
     "github.com/stackrox/rox/pkg/sac"
-    {{ else if eq .ResourceType "directlyScoped" -}}
+    {{ else if .Obj.IsDirectlyScoped -}}
     "github.com/stackrox/rox/central/role/resources"
     "github.com/stackrox/rox/pkg/auth/permissions"
     "github.com/stackrox/rox/pkg/sac/effectiveaccessscope"
@@ -89,7 +89,7 @@ var (
              		globaldb.RegisterTable(schema)
              		return schema
              	}()
-    {{ if or (eq .ResourceType "globallyScoped") (eq .ResourceType "directlyScoped") -}}
+    {{ if or (.Obj.IsGloballyScoped) (.Obj.IsDirectlyScoped) -}}
     targetResource = resources.{{.Type | storageToResource}}
     {{- end }}
 )
@@ -359,7 +359,7 @@ func (s *storeImpl) Upsert(ctx context.Context, obj *{{.Type}}) error {
     } else if !ok {
         return sac.ErrResourceAccessDenied
     }
-    {{- else if or (eq .ResourceType "globallyScoped") (eq .ResourceType "directlyScoped") }}
+    {{- else if or (.Obj.IsGloballyScoped) (.Obj.IsDirectlyScoped) }}
     scopeChecker := sac.GlobalAccessScopeChecker(ctx).AccessMode(storage.Access_READ_WRITE_ACCESS).Resource(targetResource)
     if ok, err := scopeChecker.Allowed(ctx); err != nil {
         return err
@@ -367,7 +367,7 @@ func (s *storeImpl) Upsert(ctx context.Context, obj *{{.Type}}) error {
         return sac.ErrResourceAccessDenied
     }
     {{- end }}
-    {{ if eq .ResourceType "directlyScoped" -}}
+    {{ if .Obj.IsDirectlyScoped -}}
     eas, err := scopeChecker.EffectiveAccessScope(permissions.Modify(targetResource))
     if err != nil {
         return err
@@ -389,7 +389,7 @@ func (s *storeImpl) UpsertMany(ctx context.Context, objs []*{{.Type}}) error {
     } else if !ok {
         return sac.ErrResourceAccessDenied
     }
-    {{- else if or (eq .ResourceType "globallyScoped") (eq .ResourceType "directlyScoped") }}
+    {{- else if or (.Obj.IsGloballyScoped) (.Obj.IsDirectlyScoped) }}
     scopeChecker := sac.GlobalAccessScopeChecker(ctx).AccessMode(storage.Access_READ_WRITE_ACCESS).Resource(targetResource)
     if ok, err := scopeChecker.Allowed(ctx); err != nil {
         return err
@@ -397,7 +397,7 @@ func (s *storeImpl) UpsertMany(ctx context.Context, objs []*{{.Type}}) error {
         return sac.ErrResourceAccessDenied
     }
     {{- end}}
-    {{ if eq .ResourceType "directlyScoped" -}}
+    {{ if .Obj.IsDirectlyScoped -}}
     eas, err := scopeChecker.EffectiveAccessScope(permissions.Modify(targetResource))
     if err != nil {
         return err
@@ -425,7 +425,7 @@ func (s *storeImpl) Count(ctx context.Context) (int, error) {
     if ok, err := {{ .PermissionChecker }}.CountAllowed(ctx); err != nil || !ok {
         return 0, err
     }
-    {{- else if eq .ResourceType "globallyScoped" }}
+    {{- else if .Obj.IsGloballyScoped }}
     scopeChecker := sac.GlobalAccessScopeChecker(ctx).AccessMode(storage.Access_READ_ACCESS).Resource(targetResource)
     if ok, err := scopeChecker.Allowed(ctx); err != nil || !ok {
         return 0, err
@@ -448,7 +448,7 @@ func (s *storeImpl) Exists(ctx context.Context, {{template "paramList" $pks}}) (
     if ok, err := {{ .PermissionChecker }}.ExistsAllowed(ctx); err != nil || !ok {
         return false, err
     }
-    {{- else if eq .ResourceType "globallyScoped" }}
+    {{- else if .Obj.IsGloballyScoped }}
     scopeChecker := sac.GlobalAccessScopeChecker(ctx).AccessMode(storage.Access_READ_ACCESS).Resource(targetResource)
     if ok, err := scopeChecker.Allowed(ctx); err != nil {
         return false, err
@@ -473,7 +473,7 @@ func (s *storeImpl) Get(ctx context.Context, {{template "paramList" $pks}}) (*{{
     if ok, err := {{ .PermissionChecker }}.GetAllowed(ctx); err != nil || !ok {
         return nil, false, err
     }
-    {{- else if eq .ResourceType "globallyScoped" }}
+    {{- else if .Obj.IsGloballyScoped }}
     scopeChecker := sac.GlobalAccessScopeChecker(ctx).AccessMode(storage.Access_READ_ACCESS).Resource(targetResource)
     if ok, err := scopeChecker.Allowed(ctx); err != nil {
         return nil, false, err
@@ -521,7 +521,7 @@ func (s *storeImpl) Delete(ctx context.Context, {{template "paramList" $pks}}) e
     } else if !ok {
         return sac.ErrResourceAccessDenied
     }
-    {{- else if eq .ResourceType "globallyScoped" }}
+    {{- else if .Obj.IsGloballyScoped }}
     scopeChecker := sac.GlobalAccessScopeChecker(ctx).AccessMode(storage.Access_READ_WRITE_ACCESS).Resource(targetResource)
     if ok, err := scopeChecker.Allowed(ctx); err != nil {
         return err
@@ -553,7 +553,7 @@ func (s *storeImpl) GetIDs(ctx context.Context) ([]{{$singlePK.Type}}, error) {
     if ok, err := {{ .PermissionChecker }}.GetIDsAllowed(ctx); err != nil || !ok {
         return nil, err
     }
-    {{- else if eq .ResourceType "globallyScoped" }}
+    {{- else if .Obj.IsGloballyScoped }}
     scopeChecker := sac.GlobalAccessScopeChecker(ctx).AccessMode(storage.Access_READ_ACCESS).Resource(targetResource)
     if ok, err := scopeChecker.Allowed(ctx); err != nil {
         return nil, err
@@ -588,7 +588,7 @@ func (s *storeImpl) GetMany(ctx context.Context, ids []{{$singlePK.Type}}) ([]*{
     } else if !ok {
         return nil, nil, nil
     }
-    {{- else if eq .ResourceType "globallyScoped" }}
+    {{- else if .Obj.IsGloballyScoped }}
     scopeChecker := sac.GlobalAccessScopeChecker(ctx).AccessMode(storage.Access_READ_ACCESS).Resource(targetResource)
     if ok, err := scopeChecker.Allowed(ctx); err != nil {
         return nil, nil, err
@@ -652,7 +652,7 @@ func (s *storeImpl) DeleteMany(ctx context.Context, ids []{{$singlePK.Type}}) er
     } else if !ok {
         return sac.ErrResourceAccessDenied
     }
-    {{- else if eq .ResourceType "globallyScoped" }}
+    {{- else if .Obj.IsGloballyScoped }}
     scopeChecker := sac.GlobalAccessScopeChecker(ctx).AccessMode(storage.Access_READ_WRITE_ACCESS).Resource(targetResource)
     if ok, err := scopeChecker.Allowed(ctx); err != nil {
         return err
@@ -697,7 +697,7 @@ func (s *storeImpl) Walk(ctx context.Context, fn func(obj *{{.Type}}) error) err
 	return nil
 }
 
-{{ if eq .ResourceType "directlyScoped" }}
+{{ if .Obj.IsDirectlyScoped }}
     func isInScope(obj *{{.Type}}, eas *effectiveaccessscope.ScopeTree) bool {
     if eas.State == effectiveaccessscope.Included {
         return true
@@ -705,9 +705,9 @@ func (s *storeImpl) Walk(ctx context.Context, fn func(obj *{{.Type}}) error) err
     if eas.State == effectiveaccessscope.Excluded {
         return false
     }
-    clusterId := {{ .ClusterGetter }}
+    clusterId := {{ .Obj.GetClusterID }}
     cluster := eas.GetClusterByID(clusterId)
-    {{ if not .NamespaceGetter -}}
+    {{ if .Obj.IsClusterScope -}}
     return cluster.State == effectiveaccessscope.Included
     {{  else -}}
     if cluster.State == effectiveaccessscope.Included {
@@ -716,7 +716,7 @@ func (s *storeImpl) Walk(ctx context.Context, fn func(obj *{{.Type}}) error) err
     if cluster.State == effectiveaccessscope.Excluded {
         return false
     }
-    namespaceName := {{ .NamespaceGetter }}
+    namespaceName := {{ .Obj.GetNamespace }}
     return cluster.Namespaces[namespaceName].State == effectiveaccessscope.Included
     {{- end }}
 }
