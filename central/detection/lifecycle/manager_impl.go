@@ -268,6 +268,7 @@ func (m *managerImpl) checkAndUpdateBaseline(baselineKey processBaselineKey, ind
 	if err != nil {
 		return false, err
 	}
+	log.Infof("SHREWS checkAndUpdateBaseline got the baseline -> %s", baselineKey.deploymentID)
 
 	existingProcess := set.NewStringSet()
 	for _, element := range baseline.GetElements() {
@@ -291,12 +292,14 @@ func (m *managerImpl) checkAndUpdateBaseline(baselineKey processBaselineKey, ind
 		return false, nil
 	}
 	if !exists {
+		log.Infof("SHREWS checkAndUpdateBaseline should not be here -> %s", baselineKey.deploymentID)
 		_, err = m.baselines.UpsertProcessBaseline(lifecycleMgrCtx, key, elements, true, true)
 		return false, err
 	}
 
 	userBaseline := processbaseline.IsUserLocked(baseline)
 	roxBaseline := processbaseline.IsRoxLocked(baseline) && hasNonStartupProcess
+	log.Infof("SHREWS checkAndUpdateBaseline about to call ReprocessRiskForDeployments -> %s", baselineKey.deploymentID)
 	if userBaseline || roxBaseline {
 		// We already checked if it's in the baseline and it is not, so reprocess risk to mark the results are suspicious if necessary
 		m.reprocessor.ReprocessRiskForDeployments(baselineKey.deploymentID)

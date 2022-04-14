@@ -220,6 +220,7 @@ func (l *loopImpl) ReprocessSignatureVerifications() {
 }
 
 func (l *loopImpl) sendDeployments(deploymentIDs []string) {
+	log.Infof("SHREWS sendDeployments -- %s", deploymentIDs)
 	query := search.NewQueryBuilder().AddStringsHighlighted(search.ClusterID, search.WildcardString)
 	if len(deploymentIDs) > 0 {
 		query = query.AddDocIDs(deploymentIDs...)

@@ -114,11 +114,12 @@ class ProcessBaselinesTest extends BaseSpecification {
         // Check that startup processes are not impacted
 //         Thread.sleep(10000)
         // sleep 5 seconds to allow for propagation to sensor
-        sleep 5000
+//         sleep 500
         orchestrator.execInContainer(deployment, "ls")
 //         Thread.sleep(60000)
         sleep 60000
         orchestrator.execInContainer(deployment, "pwd")
+        sleep 5000
 
         then:
         "verify for suspicious process in risk indicator"
