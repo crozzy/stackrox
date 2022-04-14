@@ -227,6 +227,7 @@ func (m *managerImpl) addToQueue(indicator *storage.ProcessIndicator) {
 }
 
 func (m *managerImpl) addBaseline(deploymentID string) {
+	log.Infof("SHREWS addBaseline -> %s", deploymentID)
 	defer centralMetrics.SetFunctionSegmentDuration(time.Now(), "CheckAndUpdateBaseline")
 
 	// Simply use search to find the process indicators for the deployment
@@ -252,6 +253,9 @@ func (m *managerImpl) addBaseline(deploymentID string) {
 }
 
 func (m *managerImpl) checkAndUpdateBaseline(baselineKey processBaselineKey, indicators []*storage.ProcessIndicator) (bool, error) {
+	log.Infof("SHREWS checkAndUpdateBaseline -> %s", baselineKey.containerName)
+	log.Infof("SHREWS checkAndUpdateBaseline -> %s", baselineKey.deploymentID)
+
 	key := &storage.ProcessBaselineKey{
 		DeploymentId:  baselineKey.deploymentID,
 		ContainerName: baselineKey.containerName,
@@ -302,6 +306,8 @@ func (m *managerImpl) checkAndUpdateBaseline(baselineKey processBaselineKey, ind
 }
 
 func (m *managerImpl) IndicatorAdded(indicator *storage.ProcessIndicator) error {
+	log.Infof("SHREWS IndicatorAdded -> %s", indicator.GetContainerName())
+	log.Infof("SHREWS IndicatorAdded -> %s", indicator.GetDeploymentId())
 	if indicator.GetId() == "" {
 		return fmt.Errorf("invalid indicator received: %s, id was empty", proto.MarshalTextString(indicator))
 	}
